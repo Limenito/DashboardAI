@@ -35,24 +35,34 @@ const fmt = (n: number) => {
  * Body: { fileName, columns: ColumnStat[], sample: Record<string, unknown>[] }
  * Returns: AnalysisResult (JSON)
  */
+// URL del backend FastAPI. Cambia esto por tu URL desplegada (Railway/Render/Fly)
+// o déjalo en localhost:8000 mientras lo pruebas en local.
+const DEFAULT_API_URL = "http://localhost:8000";
+
 export async function requestAnalysis(parsed: ParsedExcel): Promise<AnalysisResult> {
-  const apiUrl = import.meta.env.VITE_API_URL as string | undefined;
+  const envUrl = import.meta.env.VITE_API_URL as string | undefined;
+  const apiUrl = envUrl || DEFAULT_API_URL;
 
   if (apiUrl) {
-    const res = await fetch(`${apiUrl.replace(/\/$/, "")}/analyze`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        fileName: parsed.fileName,
-        rowCount: parsed.rowCount,
-        columns: parsed.stats,
-        sample: parsed.sample,
-      }),
-    });
-    if (!res.ok) throw new Error(`Backend error ${res.status}`);
-    const remote: AnalysisResult = await res.json();
-    // Charts may come without data; build them from rows if needed
-    return enrichCharts(remote, parsed);
+    try {
+      const res = await fetch(`${apiUrl.replace(/\/$/, "")}/analyze`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileName: parsed.fileName,
+          rowCount: parsed.rowCount,
+          columns: parsed.stats,
+          sample: parsed.sample,
+        }),
+      });
+      if (!res.ok) throw new Error(`Backend error ${res.status}`);
+      const remote: AnalysisResult = await res.json();
+      // Charts may come without data; build them from rows if needed
+      return enrichCharts(remote, parsed);
+    } catch (err) {
+      console.warn("Backend no disponible, usando análisis local:", err);
+      // cae al fallback heurístico
+    }
   }
 
   // Fallback heurístico (modo demo)
