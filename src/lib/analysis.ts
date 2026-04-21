@@ -46,19 +46,23 @@ export async function requestAnalysis(parsed: ParsedExcel): Promise<AnalysisResu
   if (apiUrl) {
     try {
       const res = await fetch(`${apiUrl.replace(/\/$/, "")}/analyze`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        fileName: parsed.fileName,
-        rowCount: parsed.rowCount,
-        columns: parsed.stats,
-        sample: parsed.sample,
-      }),
-    });
-    if (!res.ok) throw new Error(`Backend error ${res.status}`);
-    const remote: AnalysisResult = await res.json();
-    // Charts may come without data; build them from rows if needed
-    return enrichCharts(remote, parsed);
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileName: parsed.fileName,
+          rowCount: parsed.rowCount,
+          columns: parsed.stats,
+          sample: parsed.sample,
+        }),
+      });
+      if (!res.ok) throw new Error(`Backend error ${res.status}`);
+      const remote: AnalysisResult = await res.json();
+      // Charts may come without data; build them from rows if needed
+      return enrichCharts(remote, parsed);
+    } catch (err) {
+      console.warn("Backend no disponible, usando análisis local:", err);
+      // cae al fallback heurístico
+    }
   }
 
   // Fallback heurístico (modo demo)
