@@ -35,11 +35,17 @@ const fmt = (n: number) => {
  * Body: { fileName, columns: ColumnStat[], sample: Record<string, unknown>[] }
  * Returns: AnalysisResult (JSON)
  */
+// URL del backend FastAPI. Cambia esto por tu URL desplegada (Railway/Render/Fly)
+// o déjalo en localhost:8000 mientras lo pruebas en local.
+const DEFAULT_API_URL = "http://localhost:8000";
+
 export async function requestAnalysis(parsed: ParsedExcel): Promise<AnalysisResult> {
-  const apiUrl = import.meta.env.VITE_API_URL as string | undefined;
+  const envUrl = import.meta.env.VITE_API_URL as string | undefined;
+  const apiUrl = envUrl || DEFAULT_API_URL;
 
   if (apiUrl) {
-    const res = await fetch(`${apiUrl.replace(/\/$/, "")}/analyze`, {
+    try {
+      const res = await fetch(`${apiUrl.replace(/\/$/, "")}/analyze`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
