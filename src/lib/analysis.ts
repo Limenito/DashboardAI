@@ -60,8 +60,7 @@ export async function requestAnalysis(parsed: ParsedExcel): Promise<AnalysisResu
       // Charts may come without data; build them from rows if needed
       return enrichCharts(remote, parsed);
     } catch (err) {
-      console.warn("Backend no disponible, usando análisis local:", err);
-      // cae al fallback heurístico
+      console.warn("Backend no disponible, usando analisis local:", err);
     }
   }
 
