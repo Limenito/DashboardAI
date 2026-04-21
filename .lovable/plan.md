@@ -1,57 +1,53 @@
 
-# IA Dashboard desde Excel
+# Conectar tu backend FastAPI al frontend
 
-App full-stack que recibe un Excel, lo procesa con IA y genera un dashboard interactivo dinámico con gráficos elegidos por el LLM y un resumen ejecutivo.
+## Qué necesito verificar primero
 
-## Arquitectura
+No pude abrir el `.zip` en modo plan (es binario y este modo es de solo lectura). Al pasar a modo default, voy a:
 
-**Frontend (Lovable)** — React + TanStack Start + Tailwind, conectado a Supabase (Lovable Cloud) para Storage y persistencia.
+1. Descomprimir tu `ia-dashboard-backend.zip` en `/tmp` y leer `main.py` / `routes` / `README`.
+2. Confirmar que expone (o adaptar el frontend para que coincida con) este contrato que ya usa `src/lib/analysis.ts`:
 
-**Backend FastAPI (entregable separado)** — Te genero un repo descargable (`backend.zip` en /mnt/documents) listo para desplegar en Railway/Render con:
-- `POST /upload` → recibe Excel, parsea con `pandas/openpyxl`, detecta tipos de columnas
-- `POST /analyze` → llama Gemini/OpenAI con el resumen estadístico y obtiene: KPIs sugeridos, gráficos recomendados (tipo + columnas), resumen ejecutivo, palabras clave
-- `GET /analysis/{id}` → recupera análisis guardado
-- CORS abierto, `requirements.txt`, `Dockerfile`, `README` con diagrama de arquitectura e instrucciones
+   **Endpoint**: `POST {VITE_API_URL}/analyze`
+   **Request JSON**:
+   ```json
+   { "fileName": "...", "rowCount": 123, "columns": ColumnStat[], "sample": Row[] }
+   ```
+   **Response JSON**:
+   ```json
+   {
+     "summary": "string",
+     "keywords": ["..."],
+     "kpis": [{ "label": "...", "value": "...", "hint": "..." }],
+     "charts": [{ "type": "bar|line|area|pie|scatter", "title": "...", "xKey": "...", "yKeys": ["..."], "data": [...] }]
+   }
+   ```
+3. Verificar CORS (debe permitir el origen de Lovable preview + dominio publicado).
 
-El frontend apuntará al FastAPI vía variable `VITE_API_URL` (configurable). Mientras desarrollas localmente, también dejo un fallback usando server routes de TanStack para que la demo funcione sin desplegar FastAPI.
+## Cambios en el frontend
 
-## Modelo de datos (Supabase)
+Según lo que encuentre, haré una de estas dos cosas (sin reescrituras grandes):
 
-- `analyses` — id, created_at, file_name, share_token (UUID público), file_url (Storage), summary (text), keywords (jsonb), kpis (jsonb), charts (jsonb), raw_stats (jsonb)
-- Bucket `excels` (público para lectura via token)
-- RLS: lectura pública por `share_token`, escritura desde service role del backend
+- **Caso A — tu backend ya cumple el contrato**: solo configuro `VITE_API_URL` y listo. El fallback heurístico se desactiva automáticamente cuando la variable existe.
+- **Caso B — tu backend tiene otro shape** (por ejemplo recibe el archivo binario en `/upload` en vez de JSON con stats, o devuelve campos con otros nombres): ajusto `src/lib/analysis.ts` para mapear request/response a tu formato real. El resto del frontend (dashboard, charts, KPIs, tabla) no cambia porque consume el tipo `AnalysisResult` ya normalizado.
 
-Elegimos relacional (Postgres) por la naturaleza estructurada del análisis y para soportar consultas por token; jsonb para flexibilidad en gráficos dinámicos.
+## Configuración de la URL del backend
 
-## Flujo de usuario
+Como `VITE_*` se inyecta en build time y este proyecto no usa `.env`, voy a:
 
-1. **Landing minimalista** — hero centrado, dropzone grande para .xlsx/.xls, botón "Analizar"
-2. **Estado de carga** — barra de progreso con pasos: subiendo → procesando → consultando IA → renderizando
-3. **Dashboard generado** — URL única `/dashboard/{shareToken}` que contiene:
-   - Header con nombre de archivo y botón "Compartir / Copiar enlace"
-   - **Resumen ejecutivo** (card destacada, generado por IA en español)
-   - **Grid de KPIs** (4-6 tarjetas: total, promedio, máx, conteo, etc., elegidos por la IA)
-   - **Gráficos interactivos** (Recharts) — la IA decide qué tipos usar entre: barras, líneas, área, pie/donut, scatter, treemap. Cada uno con título descriptivo y leyenda
-   - **Palabras clave / insights** — chips con hallazgos relevantes
-   - **Tabla de datos** colapsable con paginación
-4. **Historial** (opcional, página `/recent`) — últimos 10 análisis públicos por share_token guardado en localStorage del usuario
+- Añadir la URL de tu backend desplegado directamente en `src/lib/analysis.ts` como constante con fallback (`import.meta.env.VITE_API_URL ?? "https://tu-backend..."`).
+- Necesito que me digas la URL pública donde desplegarás el FastAPI (Railway / Render / Fly / local con ngrok). Si todavía no está desplegado, lo dejo apuntando a `http://localhost:8000` para que pruebes en tu máquina.
 
-## IA
+## Detalles técnicos
 
-- Modelo: Gemini 2.5 Flash vía la API que prefieras configurar en el backend (la prueba pide Gemini/OpenAI directo, no Lovable AI Gateway)
-- Prompt estructurado con tool calling para devolver JSON garantizado: `{ summary, kpis[], charts[{type, title, xKey, yKeys, data}], keywords[] }`
-- El backend envía a la IA solo: nombres de columnas, tipos detectados, estadísticas descriptivas (describe()), top values categóricos y muestra de 20 filas — nunca el dataset completo
+- Se mantiene `sessionStorage` como persistencia (sin Lovable Cloud, según tu decisión previa).
+- Si tu backend devuelve `charts[].data` vacío, `enrichCharts()` ya lo rellena agregando `parsed.rows` por `xKey/yKeys` — no hay que tocar nada.
+- Si tu backend espera el archivo binario en lugar del resumen estadístico, cambiaré `requestAnalysis()` para hacer `multipart/form-data` con el `File` original (eso requiere también pasar el `File` desde `src/routes/index.tsx`, cambio mínimo de 3 líneas).
+- Manejo de errores: si el backend falla, mostrar `toast.error` con el status y caer al modo demo local opcionalmente (te pregunto en ejecución qué prefieres).
 
-## Diseño
+## Lo que necesito de ti
 
-- Estilo Apple-like minimalista: blanco/gris muy claro, tipografía Inter, mucho espacio en blanco, cards con sombras suaves, acentos en azul índigo
-- Modo claro por defecto, soporte modo oscuro
-- Totalmente responsive (mobile-first, los gráficos se reorganizan en columna única)
-- Microanimaciones en transiciones de upload → dashboard
+1. **URL pública del backend** (o confirmar que es local en `:8000`).
+2. ¿Tu `/analyze` recibe **JSON con stats** (contrato actual) o **el archivo Excel directamente** (`multipart/form-data`)?
 
-## Entregables al finalizar
-
-1. App Lovable funcionando (frontend + Supabase)
-2. `backend.zip` descargable con FastAPI + README + Dockerfile
-3. README con: diagrama de arquitectura, instrucciones locales (frontend y backend), descripción de cómo se usó IA en desarrollo y dentro de la app
-4. Instrucciones para conectar GitHub y desplegar (Vercel para frontend, Railway para FastAPI)
+Con eso aplico los ajustes en una sola pasada.
