@@ -55,11 +55,8 @@ const fmt = (n: number) => {
 /**
  * Backend contract — POST `${VITE_API_URL}/analyze`
  * Body: { fileName, columns: ColumnStat[], sample: Record<string, unknown>[] }
- * Returns: AnalysisResult (JSON)
+ * Returns: { id, result: AnalysisResult } (JSON). Ver BACKEND.md.
  */
-// URL del backend FastAPI expuesto vía ngrok.
-// Cuando despliegues a Railway/Render/Fly, reemplaza esta URL.
-const DEFAULT_API_URL = "https://hurried-pester-ambush.ngrok-free.app";
 
 export interface AnalysisResponse {
   id: string;
