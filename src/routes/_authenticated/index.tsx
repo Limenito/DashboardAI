@@ -7,7 +7,7 @@ import { parseExcel } from "@/lib/excel";
 import { requestAnalysis, type AnalysisResult } from "@/lib/analysis";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute("/_authenticated/")({
   head: () => ({
     meta: [
       { title: "IA Dashboard — Convierte tu Excel en insights" },
