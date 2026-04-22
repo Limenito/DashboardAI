@@ -47,7 +47,10 @@ export async function requestAnalysis(parsed: ParsedExcel): Promise<AnalysisResu
     try {
       const res = await fetch(`${apiUrl.replace(/\/$/, "")}/analyze`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "true",
+        },
         body: JSON.stringify({
           fileName: parsed.fileName,
           rowCount: parsed.rowCount,
