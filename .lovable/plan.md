@@ -1,53 +1,64 @@
 
-# Conectar tu backend FastAPI al frontend
 
-## Qué necesito verificar primero
+# Historial de búsquedas con autenticación (frontend)
 
-No pude abrir el `.zip` en modo plan (es binario y este modo es de solo lectura). Al pasar a modo default, voy a:
+Lovable Cloud ya está activo, la tabla `search_history` existe con RLS correctas (`auth.uid() = user_id` para SELECT/INSERT/DELETE), y el cliente Supabase está generado. Solo queda implementar el frontend.
 
-1. Descomprimir tu `ia-dashboard-backend.zip` en `/tmp` y leer `main.py` / `routes` / `README`.
-2. Confirmar que expone (o adaptar el frontend para que coincida con) este contrato que ya usa `src/lib/analysis.ts`:
+## Lo que ya está listo (no toco)
 
-   **Endpoint**: `POST {VITE_API_URL}/analyze`
-   **Request JSON**:
-   ```json
-   { "fileName": "...", "rowCount": 123, "columns": ColumnStat[], "sample": Row[] }
-   ```
-   **Response JSON**:
-   ```json
-   {
-     "summary": "string",
-     "keywords": ["..."],
-     "kpis": [{ "label": "...", "value": "...", "hint": "..." }],
-     "charts": [{ "type": "bar|line|area|pie|scatter", "title": "...", "xKey": "...", "yKeys": ["..."], "data": [...] }]
-   }
-   ```
-3. Verificar CORS (debe permitir el origen de Lovable preview + dominio publicado).
+- Cliente Supabase: `src/integrations/supabase/client.ts`
+- Tabla `search_history` (id, user_id, file_name, row_count, column_count, result jsonb, created_at) con RLS por usuario
+- Variables `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY`
 
 ## Cambios en el frontend
 
-Según lo que encuentre, haré una de estas dos cosas (sin reescrituras grandes):
+### 1. Auth context — `src/lib/auth.tsx`
+Provider con `useAuth()`: `session`, `user`, `loading`, `signIn`, `signUp`, `signOut`. Usa `onAuthStateChange` **antes** de `getSession()` (orden crítico para evitar race conditions). Inyectado en `__root.tsx` envolviendo `<Outlet />`.
 
-- **Caso A — tu backend ya cumple el contrato**: solo configuro `VITE_API_URL` y listo. El fallback heurístico se desactiva automáticamente cuando la variable existe.
-- **Caso B — tu backend tiene otro shape** (por ejemplo recibe el archivo binario en `/upload` en vez de JSON con stats, o devuelve campos con otros nombres): ajusto `src/lib/analysis.ts` para mapear request/response a tu formato real. El resto del frontend (dashboard, charts, KPIs, tabla) no cambia porque consume el tipo `AnalysisResult` ya normalizado.
+### 2. Rutas nuevas
+- `src/routes/login.tsx` — pública. Tabs Login / Signup (email + password). En signup pasa `emailRedirectTo: window.location.origin`. Redirige a `/` (o a `?redirect=...`) tras éxito.
+- `src/routes/_authenticated.tsx` — layout pathless. `beforeLoad` redirige a `/login?redirect=<href>` si no hay sesión.
 
-## Configuración de la URL del backend
+### 3. Mover rutas protegidas
+- `src/routes/index.tsx` → `src/routes/_authenticated/index.tsx`
+- `src/routes/dashboard.$id.tsx` → `src/routes/_authenticated/dashboard.$id.tsx`
+- Nueva: `src/routes/_authenticated/history.tsx` — lista de análisis previos (cards con `file_name`, fecha relativa, `row_count`, primeros KPIs). Cada card abre `/dashboard/$id`. Botón eliminar por fila.
 
-Como `VITE_*` se inyecta en build time y este proyecto no usa `.env`, voy a:
+### 4. Header global con sesión
+Mini componente `AppHeader` reutilizado en index, dashboard, history: muestra email del usuario, links a "Nuevo análisis" e "Historial", botón "Salir".
 
-- Añadir la URL de tu backend desplegado directamente en `src/lib/analysis.ts` como constante con fallback (`import.meta.env.VITE_API_URL ?? "https://tu-backend..."`).
-- Necesito que me digas la URL pública donde desplegarás el FastAPI (Railway / Render / Fly / local con ngrok). Si todavía no está desplegado, lo dejo apuntando a `http://localhost:8000` para que pruebes en tu máquina.
+### 5. Flujo de análisis (`src/lib/analysis.ts`)
+- Antes del `fetch` a `/analyze`, obtener JWT con `supabase.auth.getSession()` y enviarlo como `Authorization: Bearer <jwt>`.
+- El backend devolverá `{ id, ...AnalysisResult }` donde `id` es el UUID de la fila ya insertada en `search_history` por tu FastAPI.
+- `requestAnalysis` retorna también ese `id`.
+
+### 6. Persistencia
+- En `index.tsx` (autenticado): tras recibir el resultado, navegar a `/dashboard/$id` usando el `id` que devuelve el backend (ya no `crypto.randomUUID()` ni `sessionStorage`).
+- En `dashboard.$id.tsx`: cargar con `supabase.from('search_history').select('*').eq('id', id).single()` en lugar de `sessionStorage`. Reconstruir `result`, `fileName`, `rowCount` desde la fila. RLS garantiza que solo el dueño accede.
+- **Nota sobre rows crudos**: el plan original guardaba solo metadata + resultado. Esto significa que la tabla "Ver datos crudos" del dashboard **ya no estará disponible al reabrir desde historial** (solo en la sesión recién creada). Si quieres conservarla, hay que añadir `rows jsonb` a la tabla — dímelo y hago la migración. Por ahora la oculto cuando se abre desde historial.
+
+### 7. Fallback local (modo demo sin backend)
+Mantengo el `localAnalysis` como fallback, pero si el usuario no está autenticado el flujo no llega ahí (auth guard). Si el backend falla con usuario logueado, hago `INSERT` directo desde el frontend a `search_history` con el resultado local para que igual quede en el historial.
+
+## Lo que necesitas en tu FastAPI (recordatorio, no lo toco)
+
+1. Validar `Authorization: Bearer <jwt>` con la JWKS de Supabase (`https://ujnusyjjzcocqrfibbcm.supabase.co/auth/v1/.well-known/jwks.json`), extraer `sub` como `user_id`.
+2. `INSERT INTO search_history (user_id, file_name, row_count, column_count, result) VALUES (...) RETURNING id` usando service role key.
+3. Devolver `{ "id": "<uuid>", "summary": ..., "keywords": [...], "kpis": [...], "charts": [...] }`.
 
 ## Detalles técnicos
 
-- Se mantiene `sessionStorage` como persistencia (sin Lovable Cloud, según tu decisión previa).
-- Si tu backend devuelve `charts[].data` vacío, `enrichCharts()` ya lo rellena agregando `parsed.rows` por `xKey/yKeys` — no hay que tocar nada.
-- Si tu backend espera el archivo binario en lugar del resumen estadístico, cambiaré `requestAnalysis()` para hacer `multipart/form-data` con el `File` original (eso requiere también pasar el `File` desde `src/routes/index.tsx`, cambio mínimo de 3 líneas).
-- Manejo de errores: si el backend falla, mostrar `toast.error` con el status y caer al modo demo local opcionalmente (te pregunto en ejecución qué prefieres).
+- **Auth method**: solo email + password. Sin Google/Apple por ahora (lo puedes añadir después).
+- **Auto-confirm email**: lo dejo desactivado por defecto (más seguro). Si quieres pruebas rápidas sin verificar email, dímelo y lo activo.
+- **Reset password**: incluyo `/forgot-password` y `/reset-password` (rutas públicas).
+- **Realtime**: no lo activo en `search_history` por ahora; el historial se refresca al entrar a la página.
+- **Sin tabla profiles**: confirmado, no la necesitas.
 
-## Lo que necesito de ti
+## Lo que NO incluye
 
-1. **URL pública del backend** (o confirmar que es local en `:8000`).
-2. ¿Tu `/analyze` recibe **JSON con stats** (contrato actual) o **el archivo Excel directamente** (`multipart/form-data`)?
+- OAuth (Google/Apple) — fácil de añadir luego
+- Compartir análisis entre usuarios
+- Guardado del Excel original en Storage
+- Roles/admin
+- Guardado de `rows` crudos (pendiente de tu decisión arriba)
 
-Con eso aplico los ajustes en una sola pasada.
