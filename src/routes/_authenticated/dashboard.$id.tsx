@@ -1,11 +1,12 @@
 import { createFileRoute, Link, useParams } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, FileSpreadsheet, Sparkles, ChevronDown, ChevronUp } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ArrowLeft, FileSpreadsheet, Sparkles, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DynamicChart } from "@/components/DynamicChart";
-import { DataTable } from "@/components/DataTable";
+import { AppHeader } from "@/components/AppHeader";
+import { supabase } from "@/integrations/supabase/client";
 import type { AnalysisResult } from "@/lib/analysis";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/dashboard/$id")({
   head: () => ({
@@ -17,33 +18,63 @@ export const Route = createFileRoute("/_authenticated/dashboard/$id")({
   component: Dashboard,
 });
 
-interface StoredAnalysis {
+interface LoadedAnalysis {
   fileName: string;
   rowCount: number;
-  columns: string[];
-  rows: Record<string, unknown>[];
   result: AnalysisResult;
 }
 
 function Dashboard() {
-  const { id } = useParams({ from: "/dashboard/$id" });
-  const [data, setData] = useState<StoredAnalysis | null>(null);
-  const [showTable, setShowTable] = useState(false);
+  const { id } = useParams({ from: "/_authenticated/dashboard/$id" });
+  const [data, setData] = useState<LoadedAnalysis | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
-    const raw = sessionStorage.getItem(`analysis:${id}`);
-    if (raw) setData(JSON.parse(raw) as StoredAnalysis);
+    let cancelled = false;
+    (async () => {
+      const { data: row, error } = await supabase
+        .from("search_history")
+        .select("file_name, row_count, result")
+        .eq("id", id)
+        .maybeSingle();
+      if (cancelled) return;
+      if (error) {
+        toast.error(error.message);
+        setNotFound(true);
+      } else if (!row) {
+        setNotFound(true);
+      } else {
+        setData({
+          fileName: row.file_name,
+          rowCount: row.row_count,
+          result: row.result as unknown as AnalysisResult,
+        });
+      }
+      setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
   const charts = useMemo(() => data?.result.charts ?? [], [data]);
 
-  if (!data) {
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (notFound || !data) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-6">
         <div className="text-center">
           <h1 className="text-xl font-semibold">Análisis no encontrado</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Los análisis se guardan en la sesión actual del navegador. Sube un Excel para empezar.
+            Este análisis no existe o no tienes acceso a él.
           </p>
           <Link
             to="/"
@@ -57,31 +88,23 @@ function Dashboard() {
     );
   }
 
-  const { result, fileName, rowCount, columns, rows } = data;
+  const { result, fileName, rowCount } = data;
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-4">
-          <Link
-            to="/"
-            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Nuevo análisis
-          </Link>
-          <div className="flex items-center gap-2 truncate">
-            <FileSpreadsheet className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <span className="truncate text-sm font-medium">{fileName}</span>
-            <span className="hidden text-xs text-muted-foreground sm:inline">
-              · {rowCount.toLocaleString()} filas
-            </span>
-          </div>
+      <AppHeader />
+
+      <div className="border-b bg-muted/30">
+        <div className="mx-auto flex max-w-6xl items-center gap-2 px-6 py-3">
+          <FileSpreadsheet className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <span className="truncate text-sm font-medium">{fileName}</span>
+          <span className="text-xs text-muted-foreground">
+            · {rowCount.toLocaleString()} filas
+          </span>
         </div>
-      </header>
+      </div>
 
       <main className="mx-auto max-w-6xl space-y-8 px-6 py-8">
-        {/* Resumen ejecutivo */}
         <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
@@ -106,7 +129,6 @@ function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* KPIs */}
         {result.kpis.length > 0 && (
           <section>
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
@@ -132,7 +154,6 @@ function Dashboard() {
           </section>
         )}
 
-        {/* Gráficos */}
         {charts.length > 0 && (
           <section>
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
@@ -145,15 +166,6 @@ function Dashboard() {
             </div>
           </section>
         )}
-
-        {/* Tabla colapsable */}
-        <section>
-          <Button variant="outline" onClick={() => setShowTable((s) => !s)} className="mb-3">
-            {showTable ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            {showTable ? "Ocultar datos" : "Ver datos crudos"}
-          </Button>
-          {showTable && <DataTable columns={columns} rows={rows} />}
-        </section>
       </main>
     </div>
   );
