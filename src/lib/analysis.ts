@@ -4,9 +4,12 @@ import { toast } from "sonner";
 
 export type ChartType = "bar" | "line" | "area" | "pie" | "scatter";
 
-/** URL del backend FastAPI. Configúrala en `.env.local` con `VITE_API_URL=https://tu-backend...`.
- *  Si no está definida, la app usa el análisis heurístico local (modo demo). */
-export const API_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") || "";
+/** URL del backend FastAPI. Por defecto usa el backend desplegado en Render.
+ *  Puedes sobrescribirlo definiendo `VITE_API_URL` en el entorno antes del build.
+ *  Si quedara vacío, la app usa el análisis heurístico local (modo demo). */
+const DEFAULT_API_URL = "https://pruebaneoconsulting-iadashboard.onrender.com";
+export const API_URL =
+  ((import.meta.env.VITE_API_URL as string | undefined) || DEFAULT_API_URL).replace(/\/$/, "");
 
 /** Timeout en ms para las llamadas al backend (cold starts en Render/Railway pueden tardar). */
 const REQUEST_TIMEOUT_MS = 60_000;
