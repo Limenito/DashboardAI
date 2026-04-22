@@ -1,64 +1,57 @@
 
 
-# Historial de búsquedas con autenticación (frontend)
+# Arreglar el flujo de login
 
-Lovable Cloud ya está activo, la tabla `search_history` existe con RLS correctas (`auth.uid() = user_id` para SELECT/INSERT/DELETE), y el cliente Supabase está generado. Solo queda implementar el frontend.
+## Diagnóstico
 
-## Lo que ya está listo (no toco)
+Los logs muestran que el signup funciona (200 OK) pero el usuario **nunca llega a iniciar sesión**. La causa: tu proyecto tiene la confirmación de email **activada** (es lo seguro por defecto), entonces:
 
-- Cliente Supabase: `src/integrations/supabase/client.ts`
-- Tabla `search_history` (id, user_id, file_name, row_count, column_count, result jsonb, created_at) con RLS por usuario
-- Variables `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY`
+- Usuario crea cuenta → recibe `confirmation_sent_at` pero **no hay sesión**.
+- Usuario intenta login con email/password → Supabase responde **"Email not confirmed"**.
+- Tu UI muestra el error genérico de Supabase en inglés, sin acción clara.
+- Usuario no entiende qué hacer.
 
-## Cambios en el frontend
+Además hay mejoras de UX que faltan: no se valida fuerza de contraseña antes de enviar, no se ofrece reenviar email de confirmación, no hay link de "olvidé contraseña", y no hay forma de saltarse la confirmación durante pruebas.
 
-### 1. Auth context — `src/lib/auth.tsx`
-Provider con `useAuth()`: `session`, `user`, `loading`, `signIn`, `signUp`, `signOut`. Usa `onAuthStateChange` **antes** de `getSession()` (orden crítico para evitar race conditions). Inyectado en `__root.tsx` envolviendo `<Outlet />`.
+## Cambios
 
-### 2. Rutas nuevas
-- `src/routes/login.tsx` — pública. Tabs Login / Signup (email + password). En signup pasa `emailRedirectTo: window.location.origin`. Redirige a `/` (o a `?redirect=...`) tras éxito.
-- `src/routes/_authenticated.tsx` — layout pathless. `beforeLoad` redirige a `/login?redirect=<href>` si no hay sesión.
+### 1. Activar auto-confirmación de email (modo desarrollo)
+Habilitar `enable_confirmations = false` en la config de auth para que las cuentas nuevas inicien sesión inmediatamente sin necesidad de confirmar el correo. Esto desbloquea las pruebas YA. (En producción real lo reactivamos cuando lo pidas.)
 
-### 3. Mover rutas protegidas
-- `src/routes/index.tsx` → `src/routes/_authenticated/index.tsx`
-- `src/routes/dashboard.$id.tsx` → `src/routes/_authenticated/dashboard.$id.tsx`
-- Nueva: `src/routes/_authenticated/history.tsx` — lista de análisis previos (cards con `file_name`, fecha relativa, `row_count`, primeros KPIs). Cada card abre `/dashboard/$id`. Botón eliminar por fila.
+### 2. Mejorar `src/routes/login.tsx`
+- **Auto-login tras signup exitoso**: si `signUp` devuelve `session` (con auto-confirmación activa), hacer redirect inmediato a `/` en vez de mostrar "revisa tu correo".
+- **Mensajes de error en español y accionables**:
+  - `Invalid login credentials` → "Email o contraseña incorrectos."
+  - `Email not confirmed` → "Tu correo no está confirmado." + botón "Reenviar email de confirmación" (`supabase.auth.resend({ type: 'signup', email })`).
+  - `User already registered` → "Ya existe una cuenta con este email. Inicia sesión." + cambiar a la pestaña Login.
+  - `weak_password` → "La contraseña es muy débil. Usa al menos 8 caracteres con mayúsculas, números y símbolos."
+- **Validación previa en signup**: longitud mínima 8, contiene número y mayúscula. Evita el ida y vuelta al servidor.
+- **Link "¿Olvidaste tu contraseña?"** en la pestaña de Login → navega a `/forgot-password`.
+- **Toggle mostrar/ocultar contraseña** (icono ojo).
 
-### 4. Header global con sesión
-Mini componente `AppHeader` reutilizado en index, dashboard, history: muestra email del usuario, links a "Nuevo análisis" e "Historial", botón "Salir".
+### 3. Página `src/routes/forgot-password.tsx` (nueva, pública)
+Form con email → `supabase.auth.resetPasswordForEmail(email, { redirectTo: ${origin}/reset-password })`. Toast de confirmación.
 
-### 5. Flujo de análisis (`src/lib/analysis.ts`)
-- Antes del `fetch` a `/analyze`, obtener JWT con `supabase.auth.getSession()` y enviarlo como `Authorization: Bearer <jwt>`.
-- El backend devolverá `{ id, ...AnalysisResult }` donde `id` es el UUID de la fila ya insertada en `search_history` por tu FastAPI.
-- `requestAnalysis` retorna también ese `id`.
+### 4. Página `src/routes/reset-password.tsx` (nueva, pública)
+- Detecta `type=recovery` en el hash de la URL (Supabase lo pone tras click del email).
+- Form con nueva contraseña → `supabase.auth.updateUser({ password })`.
+- Tras éxito, redirige a `/`.
 
-### 6. Persistencia
-- En `index.tsx` (autenticado): tras recibir el resultado, navegar a `/dashboard/$id` usando el `id` que devuelve el backend (ya no `crypto.randomUUID()` ni `sessionStorage`).
-- En `dashboard.$id.tsx`: cargar con `supabase.from('search_history').select('*').eq('id', id).single()` en lugar de `sessionStorage`. Reconstruir `result`, `fileName`, `rowCount` desde la fila. RLS garantiza que solo el dueño accede.
-- **Nota sobre rows crudos**: el plan original guardaba solo metadata + resultado. Esto significa que la tabla "Ver datos crudos" del dashboard **ya no estará disponible al reabrir desde historial** (solo en la sesión recién creada). Si quieres conservarla, hay que añadir `rows jsonb` a la tabla — dímelo y hago la migración. Por ahora la oculto cuando se abre desde historial.
+### 5. Arreglar guard `src/routes/_authenticated.tsx`
+Está bien funcionalmente pero dispara navigate dentro de useEffect sin proteger contra re-entradas cuando `loading` cambia. Añadir condición para no navegar si ya estamos en `/login`.
 
-### 7. Fallback local (modo demo sin backend)
-Mantengo el `localAnalysis` como fallback, pero si el usuario no está autenticado el flujo no llega ahí (auth guard). Si el backend falla con usuario logueado, hago `INSERT` directo desde el frontend a `search_history` con el resultado local para que igual quede en el historial.
+### 6. Mejorar UX del header de auth
+En `AppHeader`, mostrar avatar/email del usuario y dropdown con "Cerrar sesión" en vez de solo botón suelto (si aún no está así).
 
-## Lo que necesitas en tu FastAPI (recordatorio, no lo toco)
+## Lo que NO toco
 
-1. Validar `Authorization: Bearer <jwt>` con la JWKS de Supabase (`https://ujnusyjjzcocqrfibbcm.supabase.co/auth/v1/.well-known/jwks.json`), extraer `sub` como `user_id`.
-2. `INSERT INTO search_history (user_id, file_name, row_count, column_count, result) VALUES (...) RETURNING id` usando service role key.
-3. Devolver `{ "id": "<uuid>", "summary": ..., "keywords": [...], "kpis": [...], "charts": [...] }`.
+- Tabla `search_history`, RLS, ni el flujo de análisis.
+- Backend FastAPI.
+- Estructura de rutas (`_authenticated/*` se mantiene).
 
-## Detalles técnicos
+## Notas técnicas
 
-- **Auth method**: solo email + password. Sin Google/Apple por ahora (lo puedes añadir después).
-- **Auto-confirm email**: lo dejo desactivado por defecto (más seguro). Si quieres pruebas rápidas sin verificar email, dímelo y lo activo.
-- **Reset password**: incluyo `/forgot-password` y `/reset-password` (rutas públicas).
-- **Realtime**: no lo activo en `search_history` por ahora; el historial se refresca al entrar a la página.
-- **Sin tabla profiles**: confirmado, no la necesitas.
-
-## Lo que NO incluye
-
-- OAuth (Google/Apple) — fácil de añadir luego
-- Compartir análisis entre usuarios
-- Guardado del Excel original en Storage
-- Roles/admin
-- Guardado de `rows` crudos (pendiente de tu decisión arriba)
+- La contraseña `Ricardoes12` que probaste falló con `weak_password` porque está en HaveIBeenPwned (tu proyecto tiene HIBP activo, lo cual es bueno). `Ricardoes12_` sí pasó.
+- Tras estos cambios, podrás: crear cuenta y entrar al instante, recuperar contraseña por email, ver errores claros en español.
+- Si más adelante quieres exigir confirmación de email en producción, solo dímelo y reactivo `enable_confirmations`.
 
