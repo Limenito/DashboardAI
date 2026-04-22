@@ -166,24 +166,3 @@ function HistoryPage() {
     </div>
   );
 }
-
-function BackendStatus({ ok }: { ok: boolean | null }) {
-  if (ok === null) return null;
-  if (ok) {
-    return (
-      <div className="mb-6 flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-4 py-2 text-xs">
-        <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-        <span className="text-foreground">Backend conectado</span>
-        <span className="ml-auto truncate font-mono text-muted-foreground">{API_URL}</span>
-      </div>
-    );
-  }
-  return (
-    <div className="mb-6 flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-2 text-xs">
-      <AlertCircle className="h-4 w-4 text-amber-500" />
-      <span className="text-foreground">
-        {API_URL ? "Backend sin conexión" : "Sin backend configurado"} — usando análisis local (modo demo)
-      </span>
-    </div>
-  );
-}
