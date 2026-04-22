@@ -1,12 +1,12 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { FileSpreadsheet, Loader2, Trash2, ArrowRight } from "lucide-react";
+import { FileSpreadsheet, Loader2, Trash2, ArrowRight, CheckCircle2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { AppHeader } from "@/components/AppHeader";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import type { AnalysisResult } from "@/lib/analysis";
+import { API_URL, pingBackend, type AnalysisResult } from "@/lib/analysis";
 
 export const Route = createFileRoute("/_authenticated/history")({
   head: () => ({
@@ -40,6 +40,7 @@ function HistoryPage() {
   const navigate = useNavigate();
   const [items, setItems] = useState<HistoryRow[] | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [backendOk, setBackendOk] = useState<boolean | null>(null);
 
   async function load() {
     const { data, error } = await supabase
@@ -56,6 +57,8 @@ function HistoryPage() {
 
   useEffect(() => {
     load();
+    if (API_URL) pingBackend().then(setBackendOk);
+    else setBackendOk(false);
   }, []);
 
   async function handleDelete(id: string) {
@@ -85,6 +88,9 @@ function HistoryPage() {
             <Link to="/">Nuevo análisis</Link>
           </Button>
         </div>
+
+        <BackendStatus ok={backendOk} />
+
 
         {items === null ? (
           <div className="flex justify-center py-20">
@@ -163,6 +169,27 @@ function HistoryPage() {
           </div>
         )}
       </main>
+    </div>
+  );
+}
+
+function BackendStatus({ ok }: { ok: boolean | null }) {
+  if (ok === null) return null;
+  if (ok) {
+    return (
+      <div className="mb-6 flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-4 py-2 text-xs">
+        <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+        <span className="text-foreground">Backend conectado</span>
+        <span className="ml-auto truncate font-mono text-muted-foreground">{API_URL}</span>
+      </div>
+    );
+  }
+  return (
+    <div className="mb-6 flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-2 text-xs">
+      <AlertCircle className="h-4 w-4 text-amber-500" />
+      <span className="text-foreground">
+        {API_URL ? "Backend sin conexión" : "Sin backend configurado"} — usando análisis local (modo demo)
+      </span>
     </div>
   );
 }
