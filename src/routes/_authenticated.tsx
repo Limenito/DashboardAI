@@ -14,9 +14,10 @@ function AuthenticatedLayout() {
 
   useEffect(() => {
     if (!loading && !session) {
-      navigate({ to: "/login", search: { redirect: location.href } });
+      navigate({ to: "/login", search: { redirect: location.pathname } });
     }
-  }, [session, loading, navigate, location.href]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session, loading]);
 
   if (loading || !session) {
     return (
