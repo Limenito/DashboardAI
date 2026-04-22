@@ -1,21 +1,31 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { FileSpreadsheet, Trash2, ArrowRight } from "lucide-react";
+import { FileSpreadsheet, Loader2, Trash2, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { AppHeader } from "@/components/AppHeader";
-import { listHistory, deleteHistoryEntry, type HistoryEntry } from "@/lib/history";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import type { AnalysisResult } from "@/lib/analysis";
 
-export const Route = createFileRoute("/history")({
+export const Route = createFileRoute("/_authenticated/history")({
   head: () => ({
     meta: [
       { title: "Historial — IA Dashboard" },
-      { name: "description", content: "Tus análisis previos guardados en este navegador." },
+      { name: "description", content: "Tus análisis previos guardados." },
     ],
   }),
   component: HistoryPage,
 });
+
+interface HistoryRow {
+  id: string;
+  file_name: string;
+  row_count: number;
+  column_count: number;
+  created_at: string;
+  result: AnalysisResult;
+}
 
 function formatRelative(iso: string): string {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -28,15 +38,35 @@ function formatRelative(iso: string): string {
 
 function HistoryPage() {
   const navigate = useNavigate();
-  const [items, setItems] = useState<HistoryEntry[]>([]);
+  const [items, setItems] = useState<HistoryRow[] | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  async function load() {
+    const { data, error } = await supabase
+      .from("search_history")
+      .select("id, file_name, row_count, column_count, created_at, result")
+      .order("created_at", { ascending: false });
+    if (error) {
+      toast.error(error.message);
+      setItems([]);
+      return;
+    }
+    setItems((data ?? []) as unknown as HistoryRow[]);
+  }
 
   useEffect(() => {
-    setItems(listHistory());
+    load();
   }, []);
 
-  function handleDelete(id: string) {
-    deleteHistoryEntry(id);
-    setItems((prev) => prev.filter((r) => r.id !== id));
+  async function handleDelete(id: string) {
+    setDeletingId(id);
+    const { error } = await supabase.from("search_history").delete().eq("id", id);
+    setDeletingId(null);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    setItems((prev) => prev?.filter((r) => r.id !== id) ?? null);
     toast.success("Análisis eliminado");
   }
 
@@ -48,7 +78,7 @@ function HistoryPage() {
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Historial</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Tus análisis anteriores en este navegador. Haz clic para reabrirlos.
+              Tus análisis anteriores. Haz clic para reabrirlos.
             </p>
           </div>
           <Button asChild variant="outline">
@@ -56,7 +86,11 @@ function HistoryPage() {
           </Button>
         </div>
 
-        {items.length === 0 ? (
+        {items === null ? (
+          <div className="flex justify-center py-20">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : items.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
               <FileSpreadsheet className="h-10 w-10 text-muted-foreground" />
@@ -88,8 +122,13 @@ function HistoryPage() {
                         size="icon"
                         className="h-8 w-8 text-muted-foreground hover:text-destructive"
                         onClick={() => handleDelete(row.id)}
+                        disabled={deletingId === row.id}
                       >
-                        <Trash2 className="h-4 w-4" />
+                        {deletingId === row.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
                       </Button>
                     </div>
 

@@ -9,96 +9,137 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as HistoryRouteImport } from './routes/history'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as DashboardIdRouteImport } from './routes/dashboard.$id'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
+import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
+import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticated/history'
+import { Route as AuthenticatedDashboardIdRouteImport } from './routes/_authenticated/dashboard.$id'
 
-const HistoryRoute = HistoryRouteImport.update({
-  id: '/history',
-  path: '/history',
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
+const AuthenticatedRoute = AuthenticatedRouteImport.update({
+  id: '/_authenticated',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthenticatedRoute,
 } as any)
-const DashboardIdRoute = DashboardIdRouteImport.update({
-  id: '/dashboard/$id',
-  path: '/dashboard/$id',
-  getParentRoute: () => rootRouteImport,
+const AuthenticatedHistoryRoute = AuthenticatedHistoryRouteImport.update({
+  id: '/history',
+  path: '/history',
+  getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedDashboardIdRoute =
+  AuthenticatedDashboardIdRouteImport.update({
+    id: '/dashboard/$id',
+    path: '/dashboard/$id',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
-  '/history': typeof HistoryRoute
-  '/dashboard/$id': typeof DashboardIdRoute
+  '/': typeof AuthenticatedIndexRoute
+  '/login': typeof LoginRoute
+  '/history': typeof AuthenticatedHistoryRoute
+  '/dashboard/$id': typeof AuthenticatedDashboardIdRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
-  '/history': typeof HistoryRoute
-  '/dashboard/$id': typeof DashboardIdRoute
+  '/login': typeof LoginRoute
+  '/history': typeof AuthenticatedHistoryRoute
+  '/': typeof AuthenticatedIndexRoute
+  '/dashboard/$id': typeof AuthenticatedDashboardIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
-  '/history': typeof HistoryRoute
-  '/dashboard/$id': typeof DashboardIdRoute
+  '/_authenticated': typeof AuthenticatedRouteWithChildren
+  '/login': typeof LoginRoute
+  '/_authenticated/history': typeof AuthenticatedHistoryRoute
+  '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/_authenticated/dashboard/$id': typeof AuthenticatedDashboardIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/history' | '/dashboard/$id'
+  fullPaths: '/' | '/login' | '/history' | '/dashboard/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/history' | '/dashboard/$id'
-  id: '__root__' | '/' | '/history' | '/dashboard/$id'
+  to: '/login' | '/history' | '/' | '/dashboard/$id'
+  id:
+    | '__root__'
+    | '/_authenticated'
+    | '/login'
+    | '/_authenticated/history'
+    | '/_authenticated/'
+    | '/_authenticated/dashboard/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
-  HistoryRoute: typeof HistoryRoute
-  DashboardIdRoute: typeof DashboardIdRoute
+  AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
+  LoginRoute: typeof LoginRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/history': {
-      id: '/history'
-      path: '/history'
-      fullPath: '/history'
-      preLoaderRoute: typeof HistoryRouteImport
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/': {
+      id: '/_authenticated/'
       path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthenticatedIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
     }
-    '/dashboard/$id': {
-      id: '/dashboard/$id'
+    '/_authenticated/history': {
+      id: '/_authenticated/history'
+      path: '/history'
+      fullPath: '/history'
+      preLoaderRoute: typeof AuthenticatedHistoryRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/dashboard/$id': {
+      id: '/_authenticated/dashboard/$id'
       path: '/dashboard/$id'
       fullPath: '/dashboard/$id'
-      preLoaderRoute: typeof DashboardIdRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthenticatedDashboardIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
     }
   }
 }
 
+interface AuthenticatedRouteChildren {
+  AuthenticatedHistoryRoute: typeof AuthenticatedHistoryRoute
+  AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
+  AuthenticatedDashboardIdRoute: typeof AuthenticatedDashboardIdRoute
+}
+
+const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
+  AuthenticatedHistoryRoute: AuthenticatedHistoryRoute,
+  AuthenticatedIndexRoute: AuthenticatedIndexRoute,
+  AuthenticatedDashboardIdRoute: AuthenticatedDashboardIdRoute,
+}
+
+const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
+  AuthenticatedRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
-  HistoryRoute: HistoryRoute,
-  DashboardIdRoute: DashboardIdRoute,
+  AuthenticatedRoute: AuthenticatedRouteWithChildren,
+  LoginRoute: LoginRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
-}

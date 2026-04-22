@@ -1,5 +1,5 @@
 import type { ParsedExcel, ColumnStat } from "./excel";
-import { saveHistoryEntry } from "./history";
+import { supabase } from "@/integrations/supabase/client";
 
 export type ChartType = "bar" | "line" | "area" | "pie" | "scatter";
 
@@ -36,6 +36,8 @@ const fmt = (n: number) => {
  * Body: { fileName, columns: ColumnStat[], sample: Record<string, unknown>[] }
  * Returns: AnalysisResult (JSON)
  */
+// URL del backend FastAPI expuesto vía ngrok.
+// Cuando despliegues a Railway/Render/Fly, reemplaza esta URL.
 const DEFAULT_API_URL = "https://hurried-pester-ambush.ngrok-free.app";
 
 export interface AnalysisResponse {
@@ -47,14 +49,20 @@ export async function requestAnalysis(parsed: ParsedExcel): Promise<AnalysisResp
   const envUrl = import.meta.env.VITE_API_URL as string | undefined;
   const apiUrl = envUrl || DEFAULT_API_URL;
 
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+
   if (apiUrl) {
     try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "ngrok-skip-browser-warning": "true",
+      };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
       const res = await fetch(`${apiUrl.replace(/\/$/, "")}/analyze`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "ngrok-skip-browser-warning": "true",
-        },
+        headers,
         body: JSON.stringify({
           fileName: parsed.fileName,
           rowCount: parsed.rowCount,
@@ -67,28 +75,41 @@ export async function requestAnalysis(parsed: ParsedExcel): Promise<AnalysisResp
       const { id, ...rest } = remote;
       const result: AnalysisResult = rest.result ?? rest;
       const enriched = enrichCharts(result, parsed);
-      const saved = saveHistoryEntry({
-        id,
-        file_name: parsed.fileName,
-        row_count: parsed.rowCount,
-        column_count: parsed.columnCount,
-        result: enriched,
-      });
-      return { id: saved.id, result: enriched };
+      if (id) return { id, result: enriched };
+      // Backend respondió sin id: guardamos nosotros mismos
+      return await persistLocally(parsed, enriched);
     } catch (err) {
       console.warn("Backend no disponible, usando analisis local:", err);
     }
   }
 
-  // Fallback heurístico (modo demo)
+  // Fallback heurístico (modo demo) — guardar en historial si hay sesión
   const local = localAnalysis(parsed);
-  const saved = saveHistoryEntry({
-    file_name: parsed.fileName,
-    row_count: parsed.rowCount,
-    column_count: parsed.columnCount,
-    result: local,
-  });
-  return { id: saved.id, result: local };
+  return await persistLocally(parsed, local);
+}
+
+async function persistLocally(parsed: ParsedExcel, result: AnalysisResult): Promise<AnalysisResponse> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    // sin usuario: devolver id efímero (no debería pasar con auth guard)
+    return { id: crypto.randomUUID(), result };
+  }
+  const { data, error } = await supabase
+    .from("search_history")
+    .insert({
+      user_id: user.id,
+      file_name: parsed.fileName,
+      row_count: parsed.rowCount,
+      column_count: parsed.columnCount,
+      result: result as never,
+    })
+    .select("id")
+    .single();
+  if (error || !data) {
+    console.warn("No se pudo guardar en historial:", error);
+    return { id: crypto.randomUUID(), result };
+  }
+  return { id: data.id, result };
 }
 
 function enrichCharts(result: AnalysisResult, parsed: ParsedExcel): AnalysisResult {
@@ -104,6 +125,7 @@ function buildChartData(spec: ChartSpec, parsed: ParsedExcel): Record<string, un
     const stat = parsed.stats.find((s) => s.name === spec.xKey);
     return (stat?.topValues ?? []).map((t) => ({ name: t.value, value: t.count }));
   }
+  // group by xKey, aggregate yKeys (sum)
   const groups = new Map<string, Record<string, number>>();
   for (const row of parsed.rows) {
     const key = String(row[spec.xKey] ?? "—");
@@ -138,6 +160,7 @@ function localAnalysis(parsed: ParsedExcel): AnalysisResult {
 
   const charts: ChartSpec[] = [];
 
+  // 1. Barras: una categoría vs primer numérico
   if (categoryCols[0] && topNumeric[0]) {
     const cat = categoryCols[0];
     const num = topNumeric[0];
@@ -152,6 +175,7 @@ function localAnalysis(parsed: ParsedExcel): AnalysisResult {
     });
   }
 
+  // 2. Línea temporal si hay fecha + numérico
   if (dateCols[0] && topNumeric[0]) {
     const dt = dateCols[0];
     const num = topNumeric[0];
@@ -168,6 +192,7 @@ function localAnalysis(parsed: ParsedExcel): AnalysisResult {
     });
   }
 
+  // 3. Pie: distribución de la categoría
   if (categoryCols[0]) {
     const cat = categoryCols[0];
     const data = (cat.topValues ?? []).slice(0, 8).map((t) => ({ name: t.value, value: t.count }));
@@ -183,6 +208,7 @@ function localAnalysis(parsed: ParsedExcel): AnalysisResult {
     }
   }
 
+  // 4. Comparación multi-numérica
   if (categoryCols[0] && topNumeric.length >= 2) {
     const cat = categoryCols[0];
     const yKeys = topNumeric.slice(0, 3).map((n) => n.name);

@@ -4,10 +4,11 @@ import { ArrowLeft, FileSpreadsheet, Sparkles, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DynamicChart } from "@/components/DynamicChart";
 import { AppHeader } from "@/components/AppHeader";
-import { getHistoryEntry } from "@/lib/history";
+import { supabase } from "@/integrations/supabase/client";
 import type { AnalysisResult } from "@/lib/analysis";
+import { toast } from "sonner";
 
-export const Route = createFileRoute("/dashboard/$id")({
+export const Route = createFileRoute("/_authenticated/dashboard/$id")({
   head: () => ({
     meta: [
       { title: "Dashboard — IA Dashboard" },
@@ -24,23 +25,37 @@ interface LoadedAnalysis {
 }
 
 function Dashboard() {
-  const { id } = useParams({ from: "/dashboard/$id" });
+  const { id } = useParams({ from: "/_authenticated/dashboard/$id" });
   const [data, setData] = useState<LoadedAnalysis | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
-    const entry = getHistoryEntry(id);
-    if (!entry) {
-      setNotFound(true);
-    } else {
-      setData({
-        fileName: entry.file_name,
-        rowCount: entry.row_count,
-        result: entry.result,
-      });
-    }
-    setLoading(false);
+    let cancelled = false;
+    (async () => {
+      const { data: row, error } = await supabase
+        .from("search_history")
+        .select("file_name, row_count, result")
+        .eq("id", id)
+        .maybeSingle();
+      if (cancelled) return;
+      if (error) {
+        toast.error(error.message);
+        setNotFound(true);
+      } else if (!row) {
+        setNotFound(true);
+      } else {
+        setData({
+          fileName: row.file_name,
+          rowCount: row.row_count,
+          result: row.result as unknown as AnalysisResult,
+        });
+      }
+      setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
   const charts = useMemo(() => data?.result.charts ?? [], [data]);
@@ -59,7 +74,7 @@ function Dashboard() {
         <div className="text-center">
           <h1 className="text-xl font-semibold">Análisis no encontrado</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Este análisis no existe en este navegador.
+            Este análisis no existe o no tienes acceso a él.
           </p>
           <Link
             to="/"
