@@ -11,7 +11,7 @@ const DEFAULT_API_URL = "https://pruebaneoconsulting-iadashboard.onrender.com";
 export const API_URL = ((import.meta.env.VITE_API_URL as string | undefined) || DEFAULT_API_URL).replace(/\/$/, "");
 
 /** Timeout en ms para las llamadas al backend (cold starts en Render/Railway pueden tardar). */
-const REQUEST_TIMEOUT_MS = 120_000;
+const REQUEST_TIMEOUT_MS = 60_000;
 
 export async function pingBackend(): Promise<boolean> {
   if (!API_URL) return false;
@@ -67,16 +67,6 @@ export interface AnalysisResponse {
 
 export async function requestAnalysis(parsed: ParsedExcel): Promise<AnalysisResponse> {
   if (API_URL) {
-    try {
-      // ── Pre-warm: avisa al usuario si el backend está durmiendo ──
-      const awake = await pingBackend();
-      if (!awake) {
-        toast.info("El servidor está despertando, esto puede tardar ~30s…", {
-          duration: 30_000,
-        });
-        // Dale 35s para arrancar antes del request real
-        await new Promise((r) => setTimeout(r, 35_000));
-      }
 
       const remote = await callBackend(parsed);
       const { id, ...rest } = remote as { id?: string; result?: AnalysisResult } & AnalysisResult;
