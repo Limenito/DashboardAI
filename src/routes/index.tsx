@@ -121,8 +121,7 @@ function Index() {
       </main>
 
       <footer className="mx-auto max-w-6xl px-6 py-8 text-center text-xs text-muted-foreground">
-        Configura <code className="rounded bg-muted px-1.5 py-0.5">VITE_API_URL</code> para conectar
-        tu backend FastAPI. Sin él, se usa modo demo local.
+        IA Dashboard
       </footer>
     </div>
   );
