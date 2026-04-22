@@ -1,12 +1,12 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { FileSpreadsheet, Loader2, Trash2, ArrowRight, CheckCircle2, AlertCircle } from "lucide-react";
+import { FileSpreadsheet, Loader2, Trash2, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { AppHeader } from "@/components/AppHeader";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { API_URL, pingBackend, type AnalysisResult } from "@/lib/analysis";
+import { type AnalysisResult } from "@/lib/analysis";
 
 export const Route = createFileRoute("/_authenticated/history")({
   head: () => ({
