@@ -7,7 +7,7 @@ import { DynamicChart } from "@/components/DynamicChart";
 import { DataTable } from "@/components/DataTable";
 import type { AnalysisResult } from "@/lib/analysis";
 
-export const Route = createFileRoute("/dashboard/$id")({
+export const Route = createFileRoute("/_authenticated/dashboard/$id")({
   head: () => ({
     meta: [
       { title: "Dashboard — IA Dashboard" },
