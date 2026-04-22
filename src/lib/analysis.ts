@@ -1,7 +1,28 @@
 import type { ParsedExcel, ColumnStat } from "./excel";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 export type ChartType = "bar" | "line" | "area" | "pie" | "scatter";
+
+/** URL del backend FastAPI. Configúrala en `.env.local` con `VITE_API_URL=https://tu-backend...`.
+ *  Si no está definida, la app usa el análisis heurístico local (modo demo). */
+export const API_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") || "";
+
+/** Timeout en ms para las llamadas al backend (cold starts en Render/Railway pueden tardar). */
+const REQUEST_TIMEOUT_MS = 60_000;
+
+export async function pingBackend(): Promise<boolean> {
+  if (!API_URL) return false;
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 5000);
+    const res = await fetch(`${API_URL}/health`, { signal: ctrl.signal });
+    clearTimeout(t);
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
 
 export interface KPI {
   label: string;
