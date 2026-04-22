@@ -35,9 +35,9 @@ const fmt = (n: number) => {
  * Body: { fileName, columns: ColumnStat[], sample: Record<string, unknown>[] }
  * Returns: AnalysisResult (JSON)
  */
-// URL del backend FastAPI. Cambia esto por tu URL desplegada (Railway/Render/Fly)
-// o déjalo en localhost:8000 mientras lo pruebas en local.
-const DEFAULT_API_URL = "http://localhost:8000";
+// URL del backend FastAPI expuesto vía ngrok.
+// Cuando despliegues a Railway/Render/Fly, reemplaza esta URL.
+const DEFAULT_API_URL = "https://hurried-pester-ambush.ngrok-free.app";
 
 export async function requestAnalysis(parsed: ParsedExcel): Promise<AnalysisResult> {
   const envUrl = import.meta.env.VITE_API_URL as string | undefined;
@@ -47,7 +47,10 @@ export async function requestAnalysis(parsed: ParsedExcel): Promise<AnalysisResu
     try {
       const res = await fetch(`${apiUrl.replace(/\/$/, "")}/analyze`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "true",
+        },
         body: JSON.stringify({
           fileName: parsed.fileName,
           rowCount: parsed.rowCount,
