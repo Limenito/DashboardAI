@@ -65,7 +65,7 @@ function ForgotPasswordPage() {
                   Si existe una cuenta con <span className="font-medium text-foreground">{email}</span>,
                   recibirás un email con instrucciones para restablecer tu contraseña.
                 </p>
-                <Button variant="outline" className="w-full" onClick={() => navigate({ to: "/login" })}>
+                <Button variant="outline" className="w-full" onClick={() => navigate({ to: "/login", search: { redirect: "/" } })}>
                   <ArrowLeft className="h-4 w-4" />
                   Volver al login
                 </Button>
@@ -89,6 +89,7 @@ function ForgotPasswordPage() {
                 </Button>
                 <Link
                   to="/login"
+                  search={{ redirect: "/" }}
                   className="flex items-center justify-center gap-1 text-xs text-muted-foreground hover:text-foreground"
                 >
                   <ArrowLeft className="h-3 w-3" /> Volver al login
