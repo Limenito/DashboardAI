@@ -1,5 +1,5 @@
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { createFileRoute, Navigate, Link } from "@tanstack/react-router";
+import { useState } from "react";
 import { BarChart3, Eye, EyeOff, Loader2, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,7 +46,6 @@ function validatePasswordStrength(password: string): string | null {
 
 function LoginPage() {
   const { session, signIn, signUp, loading } = useAuth();
-  const navigate = useNavigate();
   const search = Route.useSearch();
   const [tab, setTab] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
@@ -56,11 +55,12 @@ function LoginPage() {
   const [needsConfirm, setNeedsConfirm] = useState(false);
   const [resending, setResending] = useState(false);
 
-  useEffect(() => {
-    if (!loading && session) {
-      navigate({ to: search.redirect || "/" });
-    }
-  }, [session, loading, navigate, search.redirect]);
+  // If already authenticated, redirect away declaratively.
+  // Using <Navigate /> instead of useEffect+navigate avoids the render→effect
+  // ping-pong that caused the login page to "reload" itself after sign-in.
+  if (!loading && session) {
+    return <Navigate to={search.redirect || "/"} replace />;
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
