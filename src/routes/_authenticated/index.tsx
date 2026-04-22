@@ -1,13 +1,14 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { Sparkles, FileSpreadsheet, Zap, BarChart3 } from "lucide-react";
+import { Sparkles, FileSpreadsheet, Zap } from "lucide-react";
 import { Dropzone } from "@/components/Dropzone";
 import { ProgressSteps, type Step } from "@/components/ProgressSteps";
+import { AppHeader } from "@/components/AppHeader";
 import { parseExcel } from "@/lib/excel";
-import { requestAnalysis, type AnalysisResult } from "@/lib/analysis";
+import { requestAnalysis } from "@/lib/analysis";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute("/_authenticated/")({
   head: () => ({
     meta: [
       { title: "IA Dashboard — Convierte tu Excel en insights" },
@@ -38,19 +39,8 @@ function Index() {
       const parsed = await parseExcel(file);
       if (parsed.rowCount === 0) throw new Error("El archivo está vacío.");
       setStep("analyzing");
-      const result: AnalysisResult = await requestAnalysis(parsed);
+      const { id } = await requestAnalysis(parsed);
       setStep("rendering");
-      const id = crypto.randomUUID();
-      sessionStorage.setItem(
-        `analysis:${id}`,
-        JSON.stringify({
-          fileName: parsed.fileName,
-          rowCount: parsed.rowCount,
-          columns: parsed.columns,
-          rows: parsed.rows,
-          result,
-        }),
-      );
       await new Promise((r) => setTimeout(r, 300));
       navigate({ to: "/dashboard/$id", params: { id } });
     } catch (e) {
@@ -62,16 +52,7 @@ function Index() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b bg-background/80 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <BarChart3 className="h-4 w-4" />
-            </div>
-            <span className="font-semibold tracking-tight">IA Dashboard</span>
-          </div>
-        </div>
-      </header>
+      <AppHeader />
 
       <main className="mx-auto max-w-4xl px-6 py-16 sm:py-24">
         {!step ? (

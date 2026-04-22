@@ -1,4 +1,5 @@
 import type { ParsedExcel, ColumnStat } from "./excel";
+import { supabase } from "@/integrations/supabase/client";
 
 export type ChartType = "bar" | "line" | "area" | "pie" | "scatter";
 
@@ -39,18 +40,29 @@ const fmt = (n: number) => {
 // Cuando despliegues a Railway/Render/Fly, reemplaza esta URL.
 const DEFAULT_API_URL = "https://hurried-pester-ambush.ngrok-free.app";
 
-export async function requestAnalysis(parsed: ParsedExcel): Promise<AnalysisResult> {
+export interface AnalysisResponse {
+  id: string;
+  result: AnalysisResult;
+}
+
+export async function requestAnalysis(parsed: ParsedExcel): Promise<AnalysisResponse> {
   const envUrl = import.meta.env.VITE_API_URL as string | undefined;
   const apiUrl = envUrl || DEFAULT_API_URL;
 
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+
   if (apiUrl) {
     try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "ngrok-skip-browser-warning": "true",
+      };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
       const res = await fetch(`${apiUrl.replace(/\/$/, "")}/analyze`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "ngrok-skip-browser-warning": "true",
-        },
+        headers,
         body: JSON.stringify({
           fileName: parsed.fileName,
           rowCount: parsed.rowCount,
@@ -59,16 +71,45 @@ export async function requestAnalysis(parsed: ParsedExcel): Promise<AnalysisResu
         }),
       });
       if (!res.ok) throw new Error(`Backend error ${res.status}`);
-      const remote: AnalysisResult = await res.json();
-      // Charts may come without data; build them from rows if needed
-      return enrichCharts(remote, parsed);
+      const remote = await res.json();
+      const { id, ...rest } = remote;
+      const result: AnalysisResult = rest.result ?? rest;
+      const enriched = enrichCharts(result, parsed);
+      if (id) return { id, result: enriched };
+      // Backend respondió sin id: guardamos nosotros mismos
+      return await persistLocally(parsed, enriched);
     } catch (err) {
       console.warn("Backend no disponible, usando analisis local:", err);
     }
   }
 
-  // Fallback heurístico (modo demo)
-  return localAnalysis(parsed);
+  // Fallback heurístico (modo demo) — guardar en historial si hay sesión
+  const local = localAnalysis(parsed);
+  return await persistLocally(parsed, local);
+}
+
+async function persistLocally(parsed: ParsedExcel, result: AnalysisResult): Promise<AnalysisResponse> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    // sin usuario: devolver id efímero (no debería pasar con auth guard)
+    return { id: crypto.randomUUID(), result };
+  }
+  const { data, error } = await supabase
+    .from("search_history")
+    .insert({
+      user_id: user.id,
+      file_name: parsed.fileName,
+      row_count: parsed.rowCount,
+      column_count: parsed.columnCount,
+      result: result as never,
+    })
+    .select("id")
+    .single();
+  if (error || !data) {
+    console.warn("No se pudo guardar en historial:", error);
+    return { id: crypto.randomUUID(), result };
+  }
+  return { id: data.id, result };
 }
 
 function enrichCharts(result: AnalysisResult, parsed: ParsedExcel): AnalysisResult {
