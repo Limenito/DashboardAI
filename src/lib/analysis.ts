@@ -248,5 +248,8 @@ function buildSummary(
   if (dateCols.length) {
     parts.push(`Se detectó la serie temporal "${dateCols[0].name}", apta para análisis de tendencia.`);
   }
+  parts.push(
+    "⚠️ Modo demo local sin IA — configura VITE_API_URL apuntando a tu FastAPI para obtener insights generados por LLM.",
+  );
   return parts.join(" ");
 }
