@@ -67,23 +67,39 @@ export interface AnalysisResponse {
 }
 
 export async function requestAnalysis(parsed: ParsedExcel): Promise<AnalysisResponse> {
-  const envUrl = import.meta.env.VITE_API_URL as string | undefined;
-  const apiUrl = envUrl || DEFAULT_API_URL;
-
-  const { data: { session } } = await supabase.auth.getSession();
-  const token = session?.access_token;
-
-  if (apiUrl) {
+  if (API_URL) {
     try {
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-        "ngrok-skip-browser-warning": "true",
-      };
-      if (token) headers["Authorization"] = `Bearer ${token}`;
+      const remote = await callBackend(parsed);
+      const { id, ...rest } = remote as { id?: string; result?: AnalysisResult } & AnalysisResult;
+      const result: AnalysisResult = (rest as { result?: AnalysisResult }).result ?? (rest as AnalysisResult);
+      const enriched = enrichCharts(result, parsed);
+      if (id) return { id, result: enriched };
+      // Backend respondió sin id: guardamos nosotros mismos
+      return await persistLocally(parsed, enriched);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Error desconocido";
+      console.warn("Backend no disponible, usando análisis local:", err);
+      toast.warning("Backend no disponible — usando análisis local", { description: msg });
+    }
+  }
 
-      const res = await fetch(`${apiUrl.replace(/\/$/, "")}/analyze`, {
+  // Fallback heurístico (modo demo) — guardar en historial si hay sesión
+  const local = localAnalysis(parsed);
+  return await persistLocally(parsed, local);
+}
+
+async function callBackend(parsed: ParsedExcel): Promise<unknown> {
+  const doFetch = async (token: string | undefined) => {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
+    try {
+      return await fetch(`${API_URL}/analyze`, {
         method: "POST",
         headers,
+        signal: ctrl.signal,
         body: JSON.stringify({
           fileName: parsed.fileName,
           rowCount: parsed.rowCount,
@@ -91,22 +107,37 @@ export async function requestAnalysis(parsed: ParsedExcel): Promise<AnalysisResp
           sample: parsed.sample,
         }),
       });
-      if (!res.ok) throw new Error(`Backend error ${res.status}`);
-      const remote = await res.json();
-      const { id, ...rest } = remote;
-      const result: AnalysisResult = rest.result ?? rest;
-      const enriched = enrichCharts(result, parsed);
-      if (id) return { id, result: enriched };
-      // Backend respondió sin id: guardamos nosotros mismos
-      return await persistLocally(parsed, enriched);
-    } catch (err) {
-      console.warn("Backend no disponible, usando analisis local:", err);
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
+  const { data: { session } } = await supabase.auth.getSession();
+  let res: Response;
+  try {
+    res = await doFetch(session?.access_token);
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") {
+      throw new Error("Tiempo de espera agotado (60s). El backend puede estar arrancando.");
+    }
+    throw new Error("No se pudo conectar al backend.");
+  }
+
+  // Si el token expiró, refrescar y reintentar una vez
+  if (res.status === 401) {
+    const { data: refreshed } = await supabase.auth.refreshSession();
+    if (refreshed.session?.access_token) {
+      res = await doFetch(refreshed.session.access_token);
     }
   }
 
-  // Fallback heurístico (modo demo) — guardar en historial si hay sesión
-  const local = localAnalysis(parsed);
-  return await persistLocally(parsed, local);
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    if (res.status === 401) throw new Error("No autorizado. Inicia sesión nuevamente.");
+    if (res.status >= 500) throw new Error(`Error del backend (${res.status}). ${body.slice(0, 120)}`);
+    throw new Error(`Backend respondió ${res.status}. ${body.slice(0, 120)}`);
+  }
+  return res.json();
 }
 
 async function persistLocally(parsed: ParsedExcel, result: AnalysisResult): Promise<AnalysisResponse> {
