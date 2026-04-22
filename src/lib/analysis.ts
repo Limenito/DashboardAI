@@ -68,16 +68,6 @@ export interface AnalysisResponse {
 export async function requestAnalysis(parsed: ParsedExcel): Promise<AnalysisResponse> {
   if (API_URL) {
     try {
-      // ── Pre-warm: avisa al usuario si el backend está durmiendo ──
-      const awake = await pingBackend();
-      if (!awake) {
-        toast.info("El servidor está despertando, esto puede tardar ~30s…", {
-          duration: 30_000,
-        });
-        // Dale 35s para arrancar antes del request real
-        await new Promise((r) => setTimeout(r, 35_000));
-      }
-
       const remote = await callBackend(parsed);
       const remote = await callBackend(parsed);
       const { id, ...rest } = remote as { id?: string; result?: AnalysisResult } & AnalysisResult;
