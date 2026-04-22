@@ -12,7 +12,7 @@ export const API_URL =
   ((import.meta.env.VITE_API_URL as string | undefined) || DEFAULT_API_URL).replace(/\/$/, "");
 
 /** Timeout en ms para las llamadas al backend (cold starts en Render/Railway pueden tardar). */
-const REQUEST_TIMEOUT_MS = 120_000;
+const REQUEST_TIMEOUT_MS = 60_000;
 
 export async function pingBackend(): Promise<boolean> {
   if (!API_URL) return false;
