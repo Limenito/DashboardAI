@@ -8,8 +8,7 @@ export type ChartType = "bar" | "line" | "area" | "pie" | "scatter";
  *  Puedes sobrescribirlo definiendo `VITE_API_URL` en el entorno antes del build.
  *  Si quedara vacío, la app usa el análisis heurístico local (modo demo). */
 const DEFAULT_API_URL = "https://pruebaneoconsulting-iadashboard.onrender.com";
-export const API_URL =
-  ((import.meta.env.VITE_API_URL as string | undefined) || DEFAULT_API_URL).replace(/\/$/, "");
+export const API_URL = ((import.meta.env.VITE_API_URL as string | undefined) || DEFAULT_API_URL).replace(/\/$/, "");
 
 /** Timeout en ms para las llamadas al backend (cold starts en Render/Railway pueden tardar). */
 const REQUEST_TIMEOUT_MS = 60_000;
@@ -68,19 +67,7 @@ export interface AnalysisResponse {
 
 export async function requestAnalysis(parsed: ParsedExcel): Promise<AnalysisResponse> {
   if (API_URL) {
-    try {
-      try {
-      // ── Pre-warm: avisa al usuario si el backend está durmiendo ──
-      const awake = await pingBackend();
-      if (!awake) {
-        toast.info("El servidor está despertando, esto puede tardar ~30s…", {
-          duration: 30_000,
-        });
-        // Dale 35s para arrancar antes del request real
-        await new Promise((r) => setTimeout(r, 35_000));
-      }
 
-      const remote = await callBackend(parsed);
       const remote = await callBackend(parsed);
       const { id, ...rest } = remote as { id?: string; result?: AnalysisResult } & AnalysisResult;
       const result: AnalysisResult = (rest as { result?: AnalysisResult }).result ?? (rest as AnalysisResult);
@@ -124,7 +111,9 @@ async function callBackend(parsed: ParsedExcel): Promise<unknown> {
     }
   };
 
-  const { data: { session } } = await supabase.auth.getSession();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
   let res: Response;
   try {
     res = await doFetch(session?.access_token);
@@ -153,7 +142,9 @@ async function callBackend(parsed: ParsedExcel): Promise<unknown> {
 }
 
 async function persistLocally(parsed: ParsedExcel, result: AnalysisResult): Promise<AnalysisResponse> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) {
     // sin usuario: devolver id efímero (no debería pasar con auth guard)
     return { id: crypto.randomUUID(), result };
@@ -300,11 +291,7 @@ function localAnalysis(parsed: ParsedExcel): AnalysisResult {
   return { summary, keywords, kpis, charts };
 }
 
-function aggregate(
-  rows: Record<string, unknown>[],
-  groupBy: string,
-  sumKeys: string[],
-): Record<string, unknown>[] {
+function aggregate(rows: Record<string, unknown>[], groupBy: string, sumKeys: string[]): Record<string, unknown>[] {
   const groups = new Map<string, Record<string, number>>();
   for (const row of rows) {
     const raw = row[groupBy];
@@ -332,9 +319,7 @@ function buildSummary(
   dateCols: ColumnStat[],
 ): string {
   const parts: string[] = [];
-  parts.push(
-    `El archivo "${parsed.fileName}" contiene ${parsed.rowCount} registros y ${parsed.columnCount} columnas.`,
-  );
+  parts.push(`El archivo "${parsed.fileName}" contiene ${parsed.rowCount} registros y ${parsed.columnCount} columnas.`);
   if (numericCols.length) {
     const top = numericCols[0];
     parts.push(

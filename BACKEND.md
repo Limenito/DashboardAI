@@ -20,6 +20,7 @@ VITE_API_URL=https://tu-backend.onrender.com
 Healthcheck. El frontend lo usa para mostrar el estado de conexión en `/history`.
 
 **Respuesta `200`:**
+
 ```json
 { "status": "ok" }
 ```
@@ -29,10 +30,12 @@ Healthcheck. El frontend lo usa para mostrar el estado de conexión en `/history
 Recibe un resumen de un Excel parseado y devuelve KPIs, gráficos y resumen.
 
 **Headers:**
+
 - `Authorization: Bearer <supabase_access_token>`
 - `Content-Type: application/json`
 
 **Body:**
+
 ```json
 {
   "fileName": "ventas.xlsx",
@@ -55,6 +58,7 @@ Recibe un resumen de un Excel parseado y devuelve KPIs, gráficos y resumen.
 ```
 
 **Respuesta `200`:**
+
 ```json
 {
   "id": "uuid-del-análisis",
@@ -141,12 +145,12 @@ app.add_middleware(
 
 Configúralas en Render / Railway / Fly.io:
 
-| Variable | Valor | Necesaria |
-|---|---|---|
-| `SUPABASE_URL` | `https://ujnusyjjzcocqrfibbcm.supabase.co` | ✅ para validar JWT |
-| `SUPABASE_PUBLISHABLE_KEY` | tu anon key | solo si usas opción B |
-| `GEMINI_API_KEY` | tu clave de Gemini | ✅ |
-| `SUPABASE_SERVICE_ROLE_KEY` | service role key | solo si el backend escribe en `search_history` |
+| Variable                    | Valor                                      | Necesaria                                      |
+| --------------------------- | ------------------------------------------ | ---------------------------------------------- |
+| `SUPABASE_URL`              | `https://ujnusyjjzcocqrfibbcm.supabase.co` | ✅ para validar JWT                            |
+| `SUPABASE_PUBLISHABLE_KEY`  | tu anon key                                | solo si usas opción B                          |
+| `GEMINI_API_KEY`            | 'IzaSyDVMLsUCuyg2RlkaJgbwWAXxULqufONEtI'   | ✅                                             |
+| `SUPABASE_SERVICE_ROLE_KEY` | service role key                           | solo si el backend escribe en `search_history` |
 
 ## ¿Quién guarda en `search_history`?
 
