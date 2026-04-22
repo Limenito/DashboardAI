@@ -13,7 +13,7 @@ function AuthenticatedLayout() {
   const location = useLocation();
 
   useEffect(() => {
-    if (!loading && !session) {
+    if (!loading && !session && location.pathname !== "/login") {
       navigate({ to: "/login", search: { redirect: location.pathname } });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
