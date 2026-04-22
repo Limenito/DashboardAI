@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { BarChart3, Eye, EyeOff, Loader2 } from "lucide-react";
+import { BarChart3, Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,20 +31,73 @@ function ResetPasswordPage() {
   const [confirm, setConfirm] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [ready, setReady] = useState(false);
+  const [status, setStatus] = useState<"checking" | "ready" | "invalid">("checking");
 
   useEffect(() => {
-    // Supabase parses the recovery hash and emits a PASSWORD_RECOVERY event
-    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") {
-        setReady(true);
+    let cancelled = false;
+
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (cancelled) return;
+      if ((event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") && session) {
+        setStatus("ready");
       }
     });
-    // Also check existing session in case the event already fired
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) setReady(true);
-    });
-    return () => sub.subscription.unsubscribe();
+
+    async function init() {
+      // Case 1: tokens in the URL hash (#access_token=...&type=recovery)
+      const hash = typeof window !== "undefined" ? window.location.hash : "";
+      if (hash && hash.includes("access_token")) {
+        const params = new URLSearchParams(hash.replace(/^#/, ""));
+        const access_token = params.get("access_token");
+        const refresh_token = params.get("refresh_token");
+        if (access_token && refresh_token) {
+          const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+          if (!cancelled) {
+            if (error) setStatus("invalid");
+            else {
+              setStatus("ready");
+              // Clean tokens from the URL
+              window.history.replaceState(null, "", window.location.pathname);
+            }
+          }
+          return;
+        }
+      }
+
+      // Case 2: tokens in the search params (?code=...) — exchange for session
+      const search = typeof window !== "undefined" ? window.location.search : "";
+      if (search && search.includes("code=")) {
+        const code = new URLSearchParams(search).get("code");
+        if (code) {
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (!cancelled) {
+            if (error) setStatus("invalid");
+            else {
+              setStatus("ready");
+              window.history.replaceState(null, "", window.location.pathname);
+            }
+          }
+          return;
+        }
+      }
+
+      // Case 3: maybe there's already an active recovery session
+      const { data } = await supabase.auth.getSession();
+      if (cancelled) return;
+      if (data.session) {
+        setStatus("ready");
+      } else {
+        // No tokens, no session → invalid entry
+        setStatus("invalid");
+      }
+    }
+
+    init();
+
+    return () => {
+      cancelled = true;
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -87,9 +140,26 @@ function ResetPasswordPage() {
             <CardDescription>Define una nueva contraseña para tu cuenta.</CardDescription>
           </CardHeader>
           <CardContent>
-            {!ready ? (
+            {status === "checking" ? (
               <div className="flex items-center justify-center py-8 text-muted-foreground">
                 <Loader2 className="h-5 w-5 animate-spin" />
+              </div>
+            ) : status === "invalid" ? (
+              <div className="space-y-4">
+                <div className="flex items-start gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <div>
+                    Este enlace de recuperación no es válido o ha caducado. Solicita uno nuevo desde
+                    “¿Olvidaste tu contraseña?”.
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => navigate({ to: "/forgot-password" })}
+                >
+                  Solicitar nuevo enlace
+                </Button>
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
