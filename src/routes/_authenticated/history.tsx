@@ -40,7 +40,6 @@ function HistoryPage() {
   const navigate = useNavigate();
   const [items, setItems] = useState<HistoryRow[] | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [backendOk, setBackendOk] = useState<boolean | null>(null);
 
   async function load() {
     const { data, error } = await supabase
@@ -57,8 +56,6 @@ function HistoryPage() {
 
   useEffect(() => {
     load();
-    if (API_URL) pingBackend().then(setBackendOk);
-    else setBackendOk(false);
   }, []);
 
   async function handleDelete(id: string) {
