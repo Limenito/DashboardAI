@@ -67,7 +67,7 @@ export interface AnalysisResponse {
 
 export async function requestAnalysis(parsed: ParsedExcel): Promise<AnalysisResponse> {
   if (API_URL) {
-
+    try {
       const remote = await callBackend(parsed);
       const { id, ...rest } = remote as { id?: string; result?: AnalysisResult } & AnalysisResult;
       const result: AnalysisResult = (rest as { result?: AnalysisResult }).result ?? (rest as AnalysisResult);
