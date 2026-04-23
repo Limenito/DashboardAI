@@ -2,57 +2,148 @@
 
 > Convierte cualquier archivo Excel en un dashboard interactivo con KPIs, gráficos y resumen ejecutivo generado por Inteligencia Artificial.
 
+
 ![Stack](https://img.shields.io/badge/Frontend-React_18-61DAFB?logo=react)
 ![Stack](https://img.shields.io/badge/Backend-FastAPI-009688?logo=fastapi)
 ![Stack](https://img.shields.io/badge/DB-Supabase-3ECF8E?logo=supabase)
 ![Stack](https://img.shields.io/badge/IA-Gemini_2.0_Flash-4285F4?logo=google)
 ![Deploy](https://img.shields.io/badge/Deploy-Render_+_Lovable-purple)
 
+---
 
-## Stack tecnológico
+# IA Dashboard
 
-| Capa | Tecnología |
+IA Dashboard es una aplicación web full-stack que transforma cualquier archivo Excel en un dashboard interactivo en segundos. El usuario sube su hoja de cálculo, la IA analiza la estructura de los datos automáticamente y genera KPIs, gráficos interactivos y un resumen ejecutivo en español — sin configuración manual ni conocimientos técnicos requeridos. Cada análisis queda guardado en el historial del usuario para poder consultarlo en cualquier momento.
+
+## Tabla de contenidos
+
+- [Demo](#demo)
+- [Funcionalidades](#funcionalidades)
+- [Stack tecnológico](#stack-tecnológico)
+- [Arquitectura](#arquitectura)
+- [Modelo de datos](#modelo-de-datos)
+- [Integración de IA](#integración-de-ia)
+- [Estructura del repositorio](#estructura-del-repositorio)
+- [Configuración local](#configuración-local)
+- [Variables de entorno](#variables-de-entorno)
+- [Deploy](#deploy)
+- [API Reference](#api-reference)
+
+---
+
+## Demo
+
+| URL | Descripción |
 |---|---|
-| Frontend | React 18 + TanStack Router + shadcn/ui |
-| Gráficos | Recharts |
-| Parseo Excel | SheetJS (client-side) |
-| Backend | FastAPI (Python 3.12) |
-| IA | Google Gemini 2.0 Flash |
-| Base de datos | Supabase (PostgreSQL) |
-| Autenticación | Supabase Auth |
-| Deploy Frontend | Lovable |
-| Deploy Backend | Render |
+| **Frontend** | https://insight-spark-797.lovable.app |
+| **Backend API** | https://pruebaneoconsulting-iadashboard.onrender.com |
+| **Docs interactivos** | https://pruebaneoconsulting-iadashboard.onrender.com/docs |
 
 ---
 
 ## Funcionalidades
 
-- **Auth completa** — registro, login, recuperación de contraseña y sesiones persistentes
-- **Carga de Excel** — drag & drop de `.xlsx` / `.xls`, parseo client-side sin enviar el binario al servidor
-- **Dashboard por IA** — resumen ejecutivo, KPIs con valores reales y 3-5 gráficos elegidos dinámicamente por Gemini según el tipo de columnas detectadas
-- **Historial** — análisis guardados por usuario con opción de reapertura y eliminación
-- **Modo demo** — si el backend no está disponible, el análisis se genera heurísticamente en el navegador
+### Autenticación
+- Registro e inicio de sesión con email y contraseña
+- Validación de fortaleza de contraseña (mínimo 8 caracteres, mayúscula y número)
+- Recuperación de contraseña vía email (forgot password + reset password)
+- Reenvío de email de confirmación
+- Sesiones persistentes gestionadas por Supabase Auth
+- Rutas protegidas — redirige a `/login` si no hay sesión activa
+
+### Análisis de Excel
+- Carga de archivos `.xlsx` y `.xls` por drag & drop o selector de archivos
+- Parseo **100% client-side** con la librería `xlsx` — el archivo binario nunca sale del navegador
+- Detección automática de tipos de columna: `number`, `date`, `category`, `text`
+- Cálculo de estadísticas por columna: suma, media, mínimo, máximo, valores únicos, top valores
+- Muestra de progreso en tiempo real (uploading → parsing → analyzing → rendering)
+
+### Dashboard generado por IA
+- **Resumen ejecutivo** en español (2-4 oraciones) con insights principales, tendencias y anomalías
+- **KPIs** (3-6 indicadores) con valores reales del dataset formateados (K/M)
+- **Gráficos interactivos** (3-5 charts) elegidos dinámicamente por la IA según el tipo de datos:
+  - Barras (`bar`) — comparación categórica vs numérica
+  - Línea (`line`) / Área (`area`) — tendencias temporales
+  - Torta (`pie`) — distribución de categorías
+  - Dispersión (`scatter`) — correlación entre variables numéricas
+- **Palabras clave** (5-8 frases) que resumen el dataset
+- Tabla colapsable con los datos crudos del Excel
+
+### Historial
+- Cada análisis se persiste automáticamente en Supabase vinculado al usuario
+- Página `/history` con listado de análisis previos
+- Preview de KPIs por tarjeta en el historial
+- Timestamp relativo ("hace 5 min", "hace 2 h")
+- Reapertura de cualquier análisis anterior
+- Eliminación individual de análisis
+- Row Level Security: cada usuario solo ve sus propios datos
+
+---
+
+## Stack tecnológico
+
+| Capa | Tecnología | Versión | Justificación |
+|---|---|---|---|
+| **Frontend** | React | 18 | Ecosistema maduro, compatible con Lovable |
+| **Routing** | TanStack Router | v1 | Type-safe, file-based, ideal para rutas autenticadas |
+| **UI Components** | shadcn/ui + Tailwind CSS | — | Componentes accesibles, minimalistas y personalizables |
+| **Gráficos** | Recharts | — | Declarativo, basado en SVG, integración nativa con React |
+| **Parseo Excel** | xlsx (SheetJS) | — | Parseo client-side sin enviar el binario al servidor |
+| **Backend** | FastAPI | 0.115 | Async nativo, validación con Pydantic, OpenAPI automático |
+| **IA** | Google Gemini 2.0 Flash | — | Free tier generoso, respuesta rápida, salida JSON estructurada |
+| **Base de datos** | Supabase (PostgreSQL) | — | Auth + DB + RLS en un solo servicio, free tier permanente |
+| **Autenticación** | Supabase Auth | — | JWT, sesiones persistentes, recuperación de contraseña incluida |
+| **Deploy Frontend** | Lovable / Vercel | — | CI/CD automático desde GitHub |
+| **Deploy Backend** | Render | — | Deploy desde GitHub, variables de entorno, free tier |
+| **Vibecoding** | Lovable | — | Generación del frontend completo mediante prompts |
 
 ---
 
 ## Arquitectura
 
 ```
-Browser
-  └─ SheetJS parsea el Excel localmente
-  └─ POST /analyze → JSON con stats (~10KB, nunca el binario)
-        │
-        ▼
-  FastAPI (Render)
-  └─ build_prompt() con schema + muestra de 10 filas
-  └─ Gemini 2.0 Flash → { summary, kpis, charts }
-        │
-        ▼
-  Frontend renderiza el dashboard
-  └─ Supabase guarda el resultado vinculado al usuario
+┌─────────────────────────────────────────────────────────────────┐
+│                     BROWSER (Cliente)                            │
+│                                                                  │
+│  1. Usuario sube .xlsx                                           │
+│  2. SheetJS parsea el archivo localmente                         │
+│     → Extrae: columnas, tipos, stats, muestra (20 filas)         │
+│  3. POST /analyze con JSON liviano (~10KB)                       │
+│  4. Recibe AnalysisResult → renderiza dashboard                  │
+│  5. Persiste resultado en Supabase                               │
+└──────────────┬──────────────────────────┬───────────────────────┘
+               │ POST /analyze            │ SDK Supabase
+               ▼                          ▼
+┌──────────────────────────┐   ┌──────────────────────────────────┐
+│   BACKEND (FastAPI)       │   │   SUPABASE                       │
+│   Render.com              │   │                                  │
+│                           │   │  auth.users    (Supabase Auth)   │
+│  main.py   → Rutas, CORS  │   │  search_history (PostgreSQL)     │
+│  models.py → Pydantic     │   │                                  │
+│  gemini.py → Prompt + LLM │   │  Row Level Security activo       │
+└──────────┬───────────────┘   └──────────────────────────────────┘
+           │ generate_content()
+           ▼
+┌──────────────────────────┐
+│   GOOGLE GEMINI API       │
+│   gemini-2.0-flash        │
+│                           │
+│  Input:  schema + muestra │
+│  Output: JSON estructurado│
+│  (summary, kpis, charts)  │
+└──────────────────────────┘
 ```
 
-**El backend es stateless** — solo recibe metadata, llama a Gemini y devuelve JSON. La persistencia la maneja el frontend directamente contra Supabase con Row Level Security.
+### Decisiones de arquitectura
+
+**¿Por qué parsear el Excel en el cliente?**
+El archivo `.xlsx` se procesa con SheetJS directamente en el navegador. Al backend solo llega un JSON con estadísticas y una muestra de 20 filas (~10KB), nunca el binario. Esto elimina límites de tamaño de archivo en el servidor, reduce la latencia y simplifica el backend.
+
+**¿Por qué no hay base de datos en el backend?**
+El estado se divide en dos capas: los análisis se persisten en Supabase (PostgreSQL) directamente desde el frontend usando el SDK de Supabase. El backend es completamente stateless — recibe un request, llama a Gemini y devuelve JSON. Esto permite escalado horizontal sin coordinación de estado.
+
+**¿Por qué Supabase y no Firebase o una BD propia?**
+Supabase ofrece Auth + PostgreSQL + Row Level Security en un solo servicio con free tier permanente. Las políticas RLS garantizan que cada usuario acceda únicamente a sus propios análisis sin lógica extra en el backend.
 
 ---
 
@@ -67,116 +158,395 @@ create table public.search_history (
   file_name     text not null,
   row_count     integer not null default 0,
   column_count  integer not null default 0,
-  result        jsonb not null,   -- { summary, keywords, kpis, charts }
+  result        jsonb not null,        -- AnalysisResult completo serializado
   created_at    timestamptz not null default now()
 );
+```
 
-alter table public.search_history enable row level security;
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `id` | uuid | PK generado automáticamente |
+| `user_id` | uuid | FK a `auth.users` — propietario del análisis |
+| `file_name` | text | Nombre del archivo Excel original |
+| `row_count` | integer | Número de filas del dataset |
+| `column_count` | integer | Número de columnas del dataset |
+| `result` | jsonb | JSON completo con summary, kpis, charts y keywords |
+| `created_at` | timestamptz | Timestamp de creación (UTC) |
 
+### Estructura del campo `result` (JSONB)
+
+```json
+{
+  "summary": "El archivo contiene 1,500 registros de ventas...",
+  "keywords": ["ventas totales", "región norte", "crecimiento Q4"],
+  "kpis": [
+    { "label": "Total Ventas", "value": "12.6M", "hint": "Promedio 8.4K" }
+  ],
+  "charts": [
+    {
+      "type": "bar",
+      "title": "Ventas por Región",
+      "description": "Comparativa de ventas agrupadas por región",
+      "xKey": "Región",
+      "yKeys": ["Ventas"],
+      "data": [{ "Región": "Norte", "Ventas": 4200000 }]
+    }
+  ]
+}
+```
+
+### Políticas de Row Level Security
+
+```sql
+-- Cada usuario solo puede leer sus propios análisis
 create policy "select own" on public.search_history
   for select using (auth.uid() = user_id);
+
+-- Solo puede insertar análisis propios
 create policy "insert own" on public.search_history
   for insert with check (auth.uid() = user_id);
+
+-- Solo puede eliminar análisis propios
 create policy "delete own" on public.search_history
   for delete using (auth.uid() = user_id);
 ```
-
-Se eligió PostgreSQL (via Supabase) por su soporte nativo de `jsonb` para almacenar el resultado del análisis, y por las políticas RLS que garantizan aislamiento de datos por usuario sin lógica adicional en el backend.
 
 ---
 
 ## Integración de IA
 
-El análisis usa **Gemini 2.0 Flash** con temperatura `0.3` para respuestas consistentes y estructuradas.
+### Modelo utilizado
+**Google Gemini 2.0 Flash** via `google-genai` SDK (Python).
 
-El prompt incluye el schema del dataset (columnas, tipos inferidos, estadísticas) y una muestra de 10 filas. Gemini devuelve un JSON estricto con:
+- Free tier: 15 RPM / 1,500 requests por día
+- Temperatura: `0.3` (respuestas determinísticas y consistentes)
+- Max output tokens: `2,048`
 
-- `summary` — resumen ejecutivo en español (2-4 oraciones)
-- `keywords` — 5-8 frases clave del dataset
-- `kpis` — 3-6 indicadores con valores reales formateados (K/M)
-- `charts` — 3-5 specs de gráficos con tipo y columnas exactas
+### Flujo de análisis
 
-La inferencia de tipos de columna se hace client-side antes de llamar al backend:
+```
+Frontend                    Backend                    Gemini
+   |                           |                          |
+   |-- POST /analyze --------> |                          |
+   |   { fileName,             |                          |
+   |     rowCount,             |                          |
+   |     columns: ColumnStat[] |                          |
+   |     sample: row[20] }     |                          |
+   |                           |-- build_prompt() ------> |
+   |                           |   (schema + estadísticas)|                          |
+   |                           |                          |-- generate_content() --> |
+   |                           |                          |   model: gemini-2.0-flash|
+   |                           |                          |   temp: 0.3              |
+   |                           | <-- JSON estructurado -- |
+   |                           |   { summary, keywords,   |
+   |                           |     kpis, charts }        |
+   | <-- AnalysisResult ------- |                          |
+```
 
-| Tipo | Criterio |
+### Prompt engineering
+
+El prompt enviado a Gemini incluye:
+
+1. **Metadata del dataset**: nombre del archivo, número de filas, descripción compacta de cada columna con su tipo inferido, estadísticas numéricas (sum, mean, min, max) y top valores para columnas categóricas.
+
+2. **Muestra de datos**: las primeras 10 filas del Excel en formato JSON.
+
+3. **Instrucciones estrictas de salida**: el modelo debe devolver únicamente un objeto JSON válido con campos exactos (`summary`, `keywords`, `kpis`, `charts`). Sin markdown, sin backticks.
+
+4. **Reglas de negocio**: 
+   - El resumen debe estar en español
+   - Los KPIs deben usar valores reales de las estadísticas
+   - Los gráficos deben referenciar nombres de columna exactos
+   - El tipo de gráfico se elige según el tipo de datos (temporal → línea, categórico → barra, distribución → pie)
+
+### Inferencia dinámica de tipos de columna
+
+El frontend clasifica cada columna automáticamente antes de enviarla al backend:
+
+| Tipo | Criterio de detección |
 |---|---|
-| `number` | >85% de valores numéricos |
-| `date` | >70% de valores con formato fecha |
-| `category` | Únicos ≤ max(20, 40% del total) |
-| `text` | Resto |
+| `number` | >85% de valores son numéricos |
+| `date` | >70% de valores coinciden con regex de fecha |
+| `category` | Valores únicos ≤ max(20, 40% del total) |
+| `text` | Resto de casos |
 
-El backend implementa retry automático con backoff (20s → 40s → 60s) ante errores de cuota 429.
+### Retry automático con backoff
+
+El backend implementa reintentos automáticos ante errores de cuota (429):
+
+```
+Intento 1 → 429 → espera 20s
+Intento 2 → 429 → espera 40s
+Intento 3 → 429 → espera 60s
+Si persiste → error descriptivo al usuario
+```
+
+### Modo demo (fallback local)
+
+Si el backend no está disponible o la cuota está agotada, el frontend ejecuta un análisis heurístico local que genera KPIs y gráficos basándose en las estadísticas calculadas por SheetJS, sin llamar a ninguna API externa.
+
+---
+
+## Estructura del repositorio
+
+```
+insight-spark-797/
+│
+├── README.md                          ← Este archivo
+│
+├── Backend/                           ← API FastAPI
+│   ├── main.py                        ← App FastAPI, CORS, rutas
+│   ├── models.py                      ← Modelos Pydantic (request/response)
+│   ├── gemini.py                      ← Integración Gemini + prompt engineering
+│   ├── requirements.txt               ← Dependencias Python
+│   ├── Procfile                       ← Comando de inicio para Render
+│   ├── .env.example                   ← Variables de entorno de ejemplo
+│   └── README.md                      ← Documentación del backend
+│
+└── src/                               ← App React (frontend)
+    ├── lib/
+    │   ├── excel.ts                   ← Parseo de Excel + inferencia de tipos
+    │   ├── analysis.ts                ← Llamada al backend + análisis local
+    │   └── auth.tsx                   ← Context de autenticación
+    ├── routes/
+    │   ├── login.tsx                  ← Login + registro + validaciones
+    │   ├── forgot-password.tsx        ← Recuperación de contraseña
+    │   ├── reset-password.tsx         ← Restablecimiento de contraseña
+    │   └── _authenticated/
+    │       ├── index.tsx              ← Home — dropzone de Excel
+    │       ├── dashboard.$id.tsx      ← Dashboard de análisis
+    │       └── history.tsx            ← Historial de análisis
+    ├── components/
+    │   ├── DynamicChart.tsx           ← Gráficos dinámicos con Recharts
+    │   ├── DataTable.tsx              ← Tabla de datos crudos
+    │   ├── Dropzone.tsx               ← Área de carga de archivos
+    │   ├── AppHeader.tsx              ← Header con navegación y auth
+    │   └── ui/                        ← Componentes shadcn/ui
+    └── integrations/supabase/
+        ├── client.ts                  ← Cliente Supabase
+        └── types.ts                   ← Tipos TypeScript generados desde Supabase
+```
 
 ---
 
 ## Configuración local
 
-### Backend
+### Requisitos previos
+
+- Python 3.12+
+- Node.js 18+ (o Bun)
+- Cuenta en [Supabase](https://supabase.com) (free)
+- API Key de [Google AI Studio](https://aistudio.google.com/app/apikey) (free)
+
+### 1. Clonar el repositorio
+
 ```bash
-cd Backend
-python -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env   # agregar GEMINI_API_KEY
-uvicorn main:app --reload
-# http://localhost:8000/docs
+git clone https://github.com/Limenito/insight-spark-797.git
+cd insight-spark-797
 ```
 
-### Frontend
+### 2. Configurar la base de datos (Supabase)
+
+En el SQL Editor de tu proyecto Supabase ejecuta:
+
+```sql
+create table public.search_history (
+  id            uuid primary key default gen_random_uuid(),
+  user_id       uuid not null references auth.users(id) on delete cascade,
+  file_name     text not null,
+  row_count     integer not null default 0,
+  column_count  integer not null default 0,
+  result        jsonb not null,
+  created_at    timestamptz not null default now()
+);
+
+create index search_history_user_id_idx
+  on public.search_history(user_id, created_at desc);
+
+alter table public.search_history enable row level security;
+
+create policy "select own" on public.search_history
+  for select using (auth.uid() = user_id);
+
+create policy "insert own" on public.search_history
+  for insert with check (auth.uid() = user_id);
+
+create policy "delete own" on public.search_history
+  for delete using (auth.uid() = user_id);
+```
+
+### 3. Backend
+
 ```bash
-npm install
-cp .env.example .env   # agregar VITE_SUPABASE_URL y VITE_SUPABASE_PUBLISHABLE_KEY
-npm run dev
-# http://localhost:5173
+cd Backend
+
+# Crear entorno virtual con Python 3.12
+python -m venv venv
+source venv/bin/activate        # Windows: venv\Scripts\activate
+
+# Instalar dependencias
+pip install -r requirements.txt
+
+# Configurar variables de entorno
+cp .env.example .env
+# Editar .env y agregar GEMINI_API_KEY
+
+# Iniciar servidor
+uvicorn main:app --reload
+# API disponible en http://localhost:8000
+# Docs en http://localhost:8000/docs
+```
+
+### 4. Frontend
+
+```bash
+# Desde la raíz del repo
+npm install          # o: bun install
+
+# Configurar variables de entorno
+cp .env.example .env
+# Editar .env con los valores de Supabase
+
+# Iniciar servidor de desarrollo
+npm run dev          # o: bun dev
+# App disponible en http://localhost:5173
 ```
 
 ---
 
 ## Variables de entorno
 
-| Variable | Dónde obtenerla |
-|---|---|
-| `GEMINI_API_KEY` | [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey) |
-| `VITE_SUPABASE_URL` | Supabase → Settings → API |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | Supabase → Settings → API |
-| `VITE_API_URL` | URL del backend en Render (opcional) |
+### Backend (`Backend/.env`)
+
+| Variable | Descripción | Obtener en |
+|---|---|---|
+| `GEMINI_API_KEY` | API Key de Google Gemini | [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey) |
+| `ALLOWED_ORIGINS` | Orígenes CORS permitidos (separados por coma) |
+
+### Frontend (`.env`)
+
+| Variable | Descripción | Obtener en |
+|---|---|---|
+| `VITE_SUPABASE_URL` | URL del proyecto Supabase | Supabase → Settings → API |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Anon key de Supabase | Supabase → Settings → API |
+| `VITE_API_URL` | URL del backend FastAPI | URL de Render (opcional) |
+
+---
+
+## Deploy
+
+### Backend — Render
+
+1. Conectar el repositorio en [render.com](https://render.com)
+2. Configurar el servicio:
+   - **Environment:** Python
+   - **Root Directory:** `Backend`
+   - **Build Command:** `pip install -r requirements.txt`
+   - **Start Command:** `uvicorn main:app --host 0.0.0.0 --port $PORT`
+3. Agregar variable de entorno `GEMINI_API_KEY`
+4. Deploy automático en cada push a `main`
+
+> **Nota:** El free tier de Render duerme el servidor tras 15 min de inactividad. El primer request del día puede tardar ~30-50s en responder (cold start).
+
+### Frontend — Lovable / Vercel
+
+El frontend se despliega automáticamente desde Lovable en cada cambio. Para deploy manual en Vercel:
+
+```bash
+npm run build
+# Subir carpeta dist/ a Vercel o conectar el repo
+```
 
 ---
 
 ## API Reference
 
 ### `GET /health`
+
+Verifica que el servidor está activo y la API Key está configurada.
+
+**Response:**
 ```json
-{ "status": "ok", "gemini_key_preview": "AIza...37E", "gemini_key_length": 39 }
-```
-
-### `POST /analyze`
-Recibe metadata del Excel, devuelve el análisis generado por IA.
-
-```json
-// Request
 {
-  "fileName": "ventas.xlsx",
-  "rowCount": 1500,
-  "columns": [
-    { "name": "Región", "type": "category", "count": 1500, "nulls": 0, "unique": 5 },
-    { "name": "Ventas", "type": "number", "sum": 12600000, "mean": 8400, "min": 100, "max": 50000 }
-  ],
-  "sample": [{ "Región": "Norte", "Ventas": 12000 }]
-}
-
-// Response
-{
-  "summary": "El dataset contiene 1,500 registros de ventas...",
-  "keywords": ["ventas 12.6M", "región norte"],
-  "kpis": [{ "label": "Total Ventas", "value": "12.6M", "hint": "Promedio 8.4K" }],
-  "charts": [{ "type": "bar", "title": "Ventas por Región", "xKey": "Región", "yKeys": ["Ventas"], "data": [] }]
+  "status": "ok",
+  "gemini_key_preview": "AIza...37E",
+  "gemini_key_length": 39
 }
 ```
 
 ---
 
+### `POST /analyze`
+
+Recibe metadata de un Excel y devuelve el análisis generado por IA.
+
+**Request body:**
+```json
+{
+  "fileName": "ventas_2024.xlsx",
+  "rowCount": 1500,
+  "columns": [
+    {
+      "name": "Región",
+      "type": "category",
+      "count": 1500,
+      "nulls": 0,
+      "unique": 5,
+      "topValues": [
+        { "value": "Norte", "count": 420 }
+      ]
+    },
+    {
+      "name": "Ventas",
+      "type": "number",
+      "count": 1500,
+      "nulls": 3,
+      "unique": 890,
+      "min": 100,
+      "max": 50000,
+      "mean": 8400,
+      "sum": 12600000
+    }
+  ],
+  "sample": [
+    { "Región": "Norte", "Ventas": 12000 }
+  ]
+}
+```
+
+**Response:**
+```json
+{
+  "summary": "El dataset contiene 1,500 registros de ventas distribuidos en 5 regiones...",
+  "keywords": ["ventas totales 12.6M", "región norte líder", "promedio 8.4K"],
+  "kpis": [
+    { "label": "Total Ventas", "value": "12.6M", "hint": "Promedio 8.4K por registro" },
+    { "label": "Registros", "value": "1,500", "hint": "3 valores nulos" }
+  ],
+  "charts": [
+    {
+      "type": "bar",
+      "title": "Ventas por Región",
+      "description": "Comparativa de ventas totales agrupadas por región geográfica",
+      "xKey": "Región",
+      "yKeys": ["Ventas"],
+      "data": []
+    }
+  ]
+}
+```
+
+> Los arrays `data` en `charts` vienen vacíos — el frontend los popula con los datos originales del Excel mediante `enrichCharts()`.
+
+---
+
 ## Uso de IA en el desarrollo
 
-- **Lovable** generó el frontend completo mediante vibecoding
-- **Claude (Anthropic)** generó el backend FastAPI analizando los tipos TypeScript del frontend para garantizar compatibilidad exacta del contrato de API
-- **Gemini 2.0 Flash** analiza cada dataset en runtime y decide qué visualizar
+Este proyecto utilizó IA en dos niveles:
+
+**En el desarrollo:**
+- **Lovable** generó el 100% del código frontend mediante vibecoding — componentes, rutas, lógica de auth y persistencia
+- **Claude (Anthropic)** generó el backend FastAPI analizando los contratos TypeScript del frontend para garantizar compatibilidad exacta de la API
+
+**En tiempo de ejecución:**
+- **Google Gemini 2.0 Flash** analiza cada dataset dinámicamente: determina qué métricas mostrar como KPIs, qué tipo de gráfico es más apropiado para cada combinación de columnas, y redacta el resumen ejecutivo en español con insights reales del dataset
